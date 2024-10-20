@@ -1,3 +1,65 @@
+install.packages(c("quantmod", "fredr", "caret", "alphavantager"))
+packages <- c("quantmod", "fredr", "caret", "alphavantager", "httr", "jsonlite", "zoo", "dplyr")
+lapply(packages, library, character.only = TRUE)
+sessionInfo()
+#Is X package loaded? 
+"package:quantmod" %in% search()
+
+
+#TRAINING/TESTING DATA
+
+#Pulling in daily inflation data - Macroeconomic Data - Inflation-adjusted expectations. 
+#Derived from the difference between nominal Treasury yields and inflation-protected bonds (TIPS)
+library(fredr)
+fredr_set_key("3c907578364cac27c9d8e6b1c7630cb1")
+breakeven_10yr <- fredr_series_observations(
+    series_id = "T10YIE",
+    observation_start = as.Date("2010-01-01"),
+    observation_end = Sys.Date()
+)    
+
+#Risk-free rate - Nominal growth expectations
+treasury_10yr <- fredr_series_observations(
+  series_id = "DGS10",            
+  observation_start = as.Date("2010-01-01"), 
+  observation_end = Sys.Date()     
+)
+
+#U/e
+unemployment_rate <- fredr_series_observations(
+  series_id = "UNRATE",
+  observation_start = as.Date("2010-01-01"),
+  observation_end = Sys.Date()
+)
+
+#Creating daily dataset using interpolation from monthly data
+start_date <- as.Date("2010-01-01")
+end_date <- Sys.Date()  # Adjust this end date as per your data range
+daily_dates <- seq(from = start_date, to = end_date, by = "day")
+daily_unemployment <- data.frame(date = daily_dates)
+daily_unemployment <- left_join(daily_unemployment, unemployment_rate, by = "date")
+daily_unemployment <- daily_unemployment %>% select(-c(2, 4, 5))
+daily_unemployment$value <- na.approx(daily_unemployment$value, rule = 2)
+
+
+#Interest rate data - 10 year Treasury yield > Fed funds rate 
+#Rationale - Short-term volatility in Fed funds rate as traders aim to rebalance portfolios. 
+
+#Treasury yield > Breakeven rate: Could indicate expectations for real economic growth without significant inflationary pressures.
+#Treasury yield ≈ Breakeven rate: Suggests that most of the yield is being eroded by inflation expectations, indicating the market anticipates little real growth.
+#Treasury yield < Breakeven rate: This is rare but could signal stagflationary conditions, where inflation expectations outpace growth expectations.
+#Having both variables enables your model to understand not only the level of interest rates and inflation expectations but also their relative dynamics
+
+#Open, High, Low, Close, Volume, Adjusted
+url_earnings <- paste0("https://www.alphavantage.co/query?function=EARNINGS&symbol=AAPL&apikey=8NIAD65MWQFINSTH")
+response <- GET(url_earnings)
+
+data <- fromJSON(content(response, "text", encoding = "UTF-8"), flatten = TRUE)
+getSymbols("AAPL", src = "yahoo")
+
+
+
+#Bloomberg Terminal (Physical terminal in TPSC1.03)
 install.packages("Rblpapi")
 library(Rblpapi)
 blpConnect()
