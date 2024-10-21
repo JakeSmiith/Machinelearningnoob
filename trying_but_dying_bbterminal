@@ -35,3 +35,8 @@ To do (@ bb terminal)
 - Or I could just do this all in BB terminal? 
 - Why don't I grab all stock-related data from bb terminal?
 - Still need to loop and perform action for all S&P500 constituents.
+
+
+
+- Later considerations (once we have the data) - How do we split up into training and testing data? 
+
