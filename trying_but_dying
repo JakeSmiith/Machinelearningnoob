@@ -50,31 +50,23 @@ daily_unemployment$value <- na.approx(daily_unemployment$value, rule = 2)
 #Treasury yield < Breakeven rate: This is rare but could signal stagflationary conditions, where inflation expectations outpace growth expectations.
 #Having both variables enables your model to understand not only the level of interest rates and inflation expectations but also their relative dynamics
 
-#Open, High, Low, Close, Volume, Adjusted
-url_earnings <- paste0("https://www.alphavantage.co/query?function=EARNINGS&symbol=AAPL&apikey=8NIAD65MWQFINSTH")
-response <- GET(url_earnings)
+#Quantmod , volatility index
+getSymbols("^VIX", src = "yahoo", from = "2010-01-01", to = Sys.Date())
+VIX <- VIX[, ncol(VIX)]
 
-data <- fromJSON(content(response, "text", encoding = "UTF-8"), flatten = TRUE)
-getSymbols("AAPL", src = "yahoo")
+#Merging macro-level data (applied to everything)
+VIX <- data.frame(date = index(VIX), coredata(VIX))
+breakeven_10yr$date <- as.Date(breakeven_10yr$date)
+treasury_10yr$date <- as.Date(treasury_10yr$date)
+daily_unemployment$date <- as.Date(daily_unemployment$date)
+VIX$date <- as.Date(VIX$date)
+combined_data <- breakeven_10yr %>%
+  left_join(treasury_10yr, by = "date") %>%
+  left_join(daily_unemployment, by = "date") %>%
+  left_join(VIX, by = "date")
+print(head(combined_data, 10), width = Inf)
 
-
-
-#Bloomberg Terminal (Physical terminal in TPSC1.03)
-install.packages("Rblpapi")
-library(Rblpapi)
-blpConnect()
-
-# Historical EPS, revenue projections, dividend yield for 1 stock
-bb_data <- bdh(securities = "AAPL US Equity", 
-                fields = c("SALES_REV_TURN", "IS_EPS","TOT_DEBT_TO_TOT_EQY") 
-                start.date = as.Date("2020-01-01"), 
-                end.date = as.Date("2023-12-31"))
-
-
-# Pulling all constituents of S&P500
-sp500_constituents <- bds("SPX Index", "INDX_MEMBERS")
-securities <- paste(sub(" [A-Z]{2}$", "", sp500_constituents$`Member Ticker and Exchange Code`), "Equity", sep = " ")
-isin_data <- bdp(securities = securities, fields = "ID_ISIN")
-bbgid_data <- bdp(securities = securities, fields = "ID_BB_GLOBAL")
-# Same securities had missing data - Omission: If the missing data points are few and their exclusion won't bias your results, you can omit those securities from your analysis. Justify why omitting these securities does not affect the overall conclusions.
-
+#Cleaning table
+combined_data <- combined_data %>%
+select(-c(2, 4, 5, 6, 8, 9))
+rename(breakeven_10yr = value.x, treasury_10yr = value.y, ue_rate = value)
