@@ -1,0 +1,29 @@
+#Automated section
+
+#Open, High, Low, Close, Volume, Adjusted
+url_earnings <- paste0("https://www.alphavantage.co/query?function=EARNINGS&symbol=AAPL&apikey=8NIAD65MWQFINSTH")
+response <- GET(url_earnings)
+
+data <- fromJSON(content(response, "text", encoding = "UTF-8"), flatten = TRUE)
+getSymbols("AAPL", src = "yahoo")
+head(AAPL)
+
+
+#Bloomberg Terminal (Physical terminal in TPSC1.03)
+install.packages("Rblpapi")
+library(Rblpapi)
+blpConnect()
+
+# Historical EPS, revenue projections, dividend yield for 1 stock
+bb_data <- bdh(securities = "AAPL US Equity", 
+                fields = c("SALES_REV_TURN", "IS_EPS","TOT_DEBT_TO_TOT_EQY") 
+                start.date = as.Date("2020-01-01"), 
+                end.date = as.Date("2023-12-31"))
+
+
+# Pulling all constituents of S&P500
+sp500_constituents <- bds("SPX Index", "INDX_MEMBERS")
+securities <- paste(sub(" [A-Z]{2}$", "", sp500_constituents$`Member Ticker and Exchange Code`), "Equity", sep = " ")
+isin_data <- bdp(securities = securities, fields = "ID_ISIN")
+bbgid_data <- bdp(securities = securities, fields = "ID_BB_GLOBAL")
+# Same securities had missing data - Omission: If the missing data points are few and their exclusion won't bias your results, you can omit those securities from your analysis. Justify why omitting these securities does not affect the overall conclusions.
