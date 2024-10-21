@@ -17,9 +17,9 @@ blpConnect()
 # Historical EPS, revenue projections, dividend yield for 1 stock
 bb_data <- bdh(securities = "AAPL US Equity", 
                 fields = c("SALES_REV_TURN", "IS_EPS","TOT_DEBT_TO_TOT_EQY") 
-                start.date = as.Date("2020-01-01"), 
+                start.date = as.Date("2010-01-01"), 
                 end.date = as.Date("2023-12-31"))
-
+#CAN WE DO SYS.DATE? 
 
 # Pulling all constituents of S&P500
 sp500_constituents <- bds("SPX Index", "INDX_MEMBERS")
@@ -27,3 +27,11 @@ securities <- paste(sub(" [A-Z]{2}$", "", sp500_constituents$`Member Ticker and 
 isin_data <- bdp(securities = securities, fields = "ID_ISIN")
 bbgid_data <- bdp(securities = securities, fields = "ID_BB_GLOBAL")
 # Same securities had missing data - Omission: If the missing data points are few and their exclusion won't bias your results, you can omit those securities from your analysis. Justify why omitting these securities does not affect the overall conclusions.
+
+
+To do (@ bb terminal)
+- Remove 'US Equity' from constituent list
+- Link up the constituent list into a loop when fetching data from alphavantage
+- Or I could just do this all in BB terminal? 
+- Why don't I grab all stock-related data from bb terminal?
+- Still need to loop and perform action for all S&P500 constituents.
