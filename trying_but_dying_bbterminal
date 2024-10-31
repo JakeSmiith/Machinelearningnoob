@@ -16,17 +16,109 @@ blpConnect()
 
 # Historical EPS, revenue projections, dividend yield for 1 stock
 bb_data <- bdh(securities = "AAPL US Equity", 
-                fields = c("SALES_REV_TURN", "IS_EPS","TOT_DEBT_TO_TOT_EQY") 
-                start.date = as.Date("2010-01-01"), 
-                end.date = as.Date("2023-12-31"))
+               fields = c("SALES_REV_TURN", "IS_EPS", "TOT_DEBT_TO_TOT_EQY"), 
+               start.date = as.Date("2010-01-01"), 
+               end.date = Sys.Date())
+
 #CAN WE DO SYS.DATE? 
 
 # Pulling all constituents of S&P500
 sp500_constituents <- bds("SPX Index", "INDX_MEMBERS")
-securities <- paste(sub(" [A-Z]{2}$", "", sp500_constituents$`Member Ticker and Exchange Code`), "Equity", sep = " ")
-isin_data <- bdp(securities = securities, fields = "ID_ISIN")
-bbgid_data <- bdp(securities = securities, fields = "ID_BB_GLOBAL")
+securities <- sub(" [A-Z]{2}$", "", sp500_constituents$`Member Ticker and Exchange Code`)
+head(securities)
+df <- data.frame(Ticker = securities, stringsAsFactors = FALSE)
+df$ticker_full <- paste(df$Ticker, "Equity", sep = " ")
+bbgid_data <- bdp(securities = df$ticker_full, fields = "ID_BB_GLOBAL")
+df$bbgid <- bbgid_data$ID_BB_GLOBAL
+
+head(df)
+
+#Historical S&P500 data
+start_date <- as.Date("2010-01-01")
+end_date <- Sys.Date()
+fields <- c("PX_OPEN", "PX_HIGH", "PX_LOW", "PX_LAST")
+sp500_ohlc <- bdh(securities = "SPX Index", 
+                  fields = fields, 
+                  start.date = start_date, 
+                  end.date = end_date)
+head(sp500_ohlc)
+
+
+ticker_full <- paste(securities, "US Equity")
+price_data <- bdh(
+  securities = ticker_full,         
+  fields = "PX_CLOSE",              
+  start.date = start_date,
+  end.date = end_date
+)
+
+
+#test
+test_data <- bdh(
+    securities = "AAPL US Equity",
+    fields = "PX_LAST",  # Or try "PX_ADJ_CLOSE"
+    start.date = start_date,
+    end.date = end_date
+)
+print(test_data)
+tail(test_data)
+
 # Same securities had missing data - Omission: If the missing data points are few and their exclusion won't bias your results, you can omit those securities from your analysis. Justify why omitting these securities does not affect the overall conclusions.
+# Load necessary libraries
+library(Rblpapi)
+library(tidyverse)
+
+# Connect to Bloomberg
+blpConnect()
+
+# Define the full list of S&P 500 tickers in Bloomberg format
+# Assuming `ticker_full` is your predefined list of tickers in "US Equity" format
+
+# Define batch size and split `ticker_full` into batches of 100
+batch_size <- 100
+ticker_batches <- split(ticker_full, ceiling(seq_along(ticker_full) / batch_size))
+
+# Initialize an empty list to store data for each batch
+all_data <- list()
+
+# Loop through each batch
+for (i in seq_along(ticker_batches)) {
+    batch <- ticker_batches[[i]]
+    batch_data <- list()  # Temporary list to store each ticker's data within the batch
+    
+    # Loop through each ticker in the current batch
+    for (ticker in batch) {
+        # Fetch the adjusted close prices for the current ticker
+        ticker_data <- bdh(
+            securities = ticker,
+            fields = "PX_LAST",  # Use "PX_LAST" or "PX_ADJ_CLOSE" based on your preference
+            start.date = start_date,
+            end.date = end_date
+        )
+        
+        # Store the result in the batch_data list with the ticker as the name
+        batch_data[[ticker]] <- ticker_data
+        
+        # Pause for 2 seconds before the next request
+        Sys.sleep(2)
+    }
+    
+    # Combine the batch data and add it to all_data
+    all_data[[i]] <- bind_rows(batch_data, .id = "ticker")
+}
+
+# Combine all batches into a single data frame
+price_data <- bind_rows(all_data)
+
+# Optionally, reshape to have dates as rows and tickers as columns
+price_data_wide <- price_data %>%
+    pivot_wider(names_from = ticker, values_from = PX_LAST) %>%
+    rename(Date = date)
+
+# Display the head of the final combined data
+print(head(price_data_wide))
+
+
 
 
 To do (@ bb terminal)
@@ -40,3 +132,6 @@ To do (@ bb terminal)
 
 - Later considerations (once we have the data) - How do we split up into training and testing data? 
 
+# What's the end goal - RMSE model
+# Idea - Create interface which allows dropdown menu - macro outlook with infl
+Dashboard whgich shows historical growth on website
