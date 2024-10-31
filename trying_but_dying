@@ -34,7 +34,7 @@ unemployment_rate <- fredr_series_observations(
 
 #Creating daily dataset using interpolation from monthly data
 start_date <- as.Date("2010-01-01")
-end_date <- Sys.Date()  # Adjust this end date as per your data range
+end_date <- Sys.Date() 
 daily_dates <- seq(from = start_date, to = end_date, by = "day")
 daily_unemployment <- data.frame(date = daily_dates)
 daily_unemployment <- left_join(daily_unemployment, unemployment_rate, by = "date")
