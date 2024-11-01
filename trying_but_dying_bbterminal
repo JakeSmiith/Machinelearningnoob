@@ -14,12 +14,6 @@ install.packages("Rblpapi")
 library(Rblpapi)
 blpConnect()
 
-# Historical EPS, revenue projections, dividend yield for 1 stock
-bb_data <- bdh(securities = "AAPL US Equity", 
-               fields = c("SALES_REV_TURN", "IS_EPS", "TOT_DEBT_TO_TOT_EQY"), 
-               start.date = as.Date("2010-01-01"), 
-               end.date = Sys.Date())
-
 #CAN WE DO SYS.DATE? 
 
 # Pulling all constituents of S&P500
@@ -56,7 +50,7 @@ price_data <- bdh(
 #test
 test_data <- bdh(
     securities = "AAPL US Equity",
-    fields = "PX_LAST",  # Or try "PX_ADJ_CLOSE"
+    fields = "PX_LAST",
     start.date = start_date,
     end.date = end_date
 )
@@ -91,7 +85,7 @@ for (i in seq_along(ticker_batches)) {
         # Fetch the adjusted close prices for the current ticker
         ticker_data <- bdh(
             securities = ticker,
-            fields = "PX_LAST",  # Use "PX_LAST" or "PX_ADJ_CLOSE" based on your preference
+            fields = "PX_LAST",  
             start.date = start_date,
             end.date = end_date
         )
@@ -118,7 +112,9 @@ price_data_wide <- price_data %>%
 # Display the head of the final combined data
 print(head(price_data_wide))
 
-
+save.image(file = "Machine_learning_noob.RData")
+summary(price_data_wide)
+dim(price_data_wide)
 
 
 To do (@ bb terminal)
@@ -135,3 +131,15 @@ To do (@ bb terminal)
 # What's the end goal - RMSE model
 # Idea - Create interface which allows dropdown menu - macro outlook with infl
 Dashboard whgich shows historical growth on website
+
+
+
+# Historical EPS, revenue projections, dividend yield for 1 stock
+bb_data <- bdh(securities = "AAPL US Equity", 
+               fields = c("SALES_REV_TURN", "IS_EPS", "TOT_DEBT_TO_TOT_EQY"), 
+               start.date = as.Date("2010-01-01"), 
+               end.date = Sys.Date())
+
+this but for the 
+
+Connect R to the internet? 
