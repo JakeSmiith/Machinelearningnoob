@@ -179,3 +179,5 @@ rsconnect::setAccountInfo(
     secret = "<YOUR_SECRET_KEY>"
 )
 rsconnect::deployApp('path/to/your/app')
+
+#to add - total viewer count, total share count, look at other packages which makes data look nice in R, mousepad that hovers over datapoints and shows datapoints. 
