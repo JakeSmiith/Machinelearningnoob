@@ -1,5 +1,5 @@
 install.packages(c("quantmod", "fredr", "caret", "alphavantager"))
-packages <- c("quantmod", "fredr", "caret", "alphavantager", "httr", "jsonlite", "zoo", "dplyr")
+packages <- c("quantmod", "fredr", "caret", "alphavantager", "httr", "jsonlite", "zoo", "dplyr", "rmarkdown", "officer")
 lapply(packages, library, character.only = TRUE)
 sessionInfo()
 #Is X package loaded? 
