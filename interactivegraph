@@ -67,7 +67,7 @@ ui <- fluidPage(
                      ),
                      mainPanel(
                          h3("Writeup Content"),
-                         p("XXX")  # Placeholder content
+                         p("This document provides an overview of your stock and macroeconomic analysis. Click the buttons to download.")
                      )
                  )
         )
@@ -83,7 +83,6 @@ server <- function(input, output, session) {
     
     # Tab 1: Interactive Plot for Selected Stock and Year
     output$graph <- renderPlotly({
-        # Filter data based on selected year
         filtered_data <- price_data_wide %>%
             filter(!is.na(.data[[input$selected_column]])) %>%
             {
@@ -94,7 +93,6 @@ server <- function(input, output, session) {
                 }
             }
         
-        # Create a Plotly plot with hover data
         plot_ly(data = filtered_data) %>%
             add_lines(
                 x = ~Date,
@@ -116,7 +114,7 @@ server <- function(input, output, session) {
             )
     })
     
-    # Tab 2: Interactive Comparison Plot
+    # Tab 2: Comparison Graph
     output$comparison_graph <- renderPlotly({
         start_date <- tryCatch(as.Date(input$input_date, format = "%Y/%m/%d"), error = function(e) NA)
         
@@ -165,51 +163,40 @@ server <- function(input, output, session) {
             )
     })
     
-    # Export filtered data
+    # Export data handler
     output$export_data <- downloadHandler(
-        filename = function() {
-            paste("Filtered_Stock_Data_", input$primary_stock, "_vs_", input$comparison_stock, ".xlsx", sep = "")
-        },
+        filename = function() { paste("Filtered_Data_", Sys.Date(), ".xlsx", sep = "") },
         content = function(file) {
-            start_date <- tryCatch(as.Date(input$input_date, format = "%Y/%m/%d"), error = function(e) NA)
-            
-            export_data <- price_data_wide %>%
-                filter(!is.na(.data[[input$primary_stock]]), !is.na(.data[[input$comparison_stock]])) %>%
-                {
-                    if (!is.na(start_date)) {
-                        filter(., Date >= start_date)
-                    } else {
-                        .
-                    }
-                }
-            
-            write.xlsx(export_data, file)
+            write.xlsx(price_data_wide, file)
         }
     )
     
-    # Writeup Tab: Download PDF
+    # PDF Download Handler
     output$download_pdf <- downloadHandler(
-        filename = function() { "Writeup.pdf" },
+        filename = function() { paste("Writeup_", Sys.Date(), ".pdf", sep = "") },
         content = function(file) {
             temp_report <- file.path(tempdir(), "writeup.Rmd")
             writeLines(c(
                 "---",
-                "title: 'Writeup'",
+                "title: 'Writeup Analysis'",
                 "output: pdf_document",
                 "---",
                 "",
-                "XXX"
+                "This document summarizes stock and macroeconomic analysis performed.",
+                "",
+                "```{r}",
+                "head(price_data_wide, 10)",
+                "```"
             ), temp_report)
-            rmarkdown::render(temp_report, output_file = file)
+            rmarkdown::render(input = temp_report, output_file = file, clean = TRUE)
         }
     )
     
-    # Writeup Tab: Download Word
+    # Word Download Handler
     output$download_word <- downloadHandler(
-        filename = function() { "Writeup.docx" },
+        filename = function() { paste("Writeup_", Sys.Date(), ".docx", sep = "") },
         content = function(file) {
-            doc <- read_docx() %>%
-                body_add_par("XXX", style = "Normal")
+            doc <- read_docx() %>% body_add_par("This is your analysis summary.", style = "Normal")
             print(doc, target = file)
         }
     )
@@ -217,8 +204,6 @@ server <- function(input, output, session) {
 
 # Run the application
 shinyApp(ui = ui, server = server)
-
-
 
 
 # stage - develop permanent web address to show linkedin connections
