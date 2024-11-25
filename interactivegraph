@@ -4,6 +4,8 @@ library(shinythemes)
 library(plotly)
 library(dplyr)
 library(openxlsx)
+library(rmarkdown)
+library(officer)
 
 # Check if `price_data_wide` exists to prevent crashes
 if (!exists("price_data_wide")) {
@@ -54,6 +56,20 @@ ui <- fluidPage(
                          plotlyOutput("comparison_graph")
                      )
                  )
+        ),
+        
+        # Tab 3: Writeup Page
+        tabPanel("Writeup",
+                 sidebarLayout(
+                     sidebarPanel(
+                         downloadButton("download_pdf", "Download PDF"),
+                         downloadButton("download_word", "Download Word")
+                     ),
+                     mainPanel(
+                         h3("Writeup Content"),
+                         p("XXX")  # Placeholder content
+                     )
+                 )
         )
     )
 )
@@ -102,10 +118,8 @@ server <- function(input, output, session) {
     
     # Tab 2: Interactive Comparison Plot
     output$comparison_graph <- renderPlotly({
-        # Convert input date to Date format
         start_date <- tryCatch(as.Date(input$input_date, format = "%Y/%m/%d"), error = function(e) NA)
         
-        # Filter data and calculate percentage change
         filtered_data <- price_data_wide %>%
             filter(!is.na(.data[[input$primary_stock]]), !is.na(.data[[input$comparison_stock]])) %>%
             {
@@ -120,7 +134,6 @@ server <- function(input, output, session) {
                 comparison_pct_change = (.data[[input$comparison_stock]] / first(.data[[input$comparison_stock]]) - 1) * 100
             )
         
-        # Create a Plotly plot with hover data for both lines
         plot_ly(data = filtered_data) %>%
             add_lines(
                 x = ~Date,
@@ -173,10 +186,38 @@ server <- function(input, output, session) {
             write.xlsx(export_data, file)
         }
     )
+    
+    # Writeup Tab: Download PDF
+    output$download_pdf <- downloadHandler(
+        filename = function() { "Writeup.pdf" },
+        content = function(file) {
+            temp_report <- file.path(tempdir(), "writeup.Rmd")
+            writeLines(c(
+                "---",
+                "title: 'Writeup'",
+                "output: pdf_document",
+                "---",
+                "",
+                "XXX"
+            ), temp_report)
+            rmarkdown::render(temp_report, output_file = file)
+        }
+    )
+    
+    # Writeup Tab: Download Word
+    output$download_word <- downloadHandler(
+        filename = function() { "Writeup.docx" },
+        content = function(file) {
+            doc <- read_docx() %>%
+                body_add_par("XXX", style = "Normal")
+            print(doc, target = file)
+        }
+    )
 }
 
 # Run the application
 shinyApp(ui = ui, server = server)
+
 
 
 
