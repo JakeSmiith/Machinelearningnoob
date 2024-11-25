@@ -1,0 +1,231 @@
+load("~/Machine_learning_noob.RData")
+library(shiny)
+library(shinythemes)
+library(plotly)
+library(dplyr)
+library(openxlsx)
+library(rmarkdown)
+library(officer)
+
+# Check if `price_data_wide` exists to prevent crashes
+if (!exists("price_data_wide")) {
+    stop("The dataset `price_data_wide` is missing. Please load the correct data.")
+}
+
+# Define UI
+ui <- fluidPage(
+    uiOutput("theme_ui"),  # Dynamically render the UI with the selected theme
+    titlePanel("Interactive Graph Loader"),
+    
+    tabsetPanel(
+        # Tab 1: Main Graph Page
+        tabPanel("View Stock",
+                 sidebarLayout(
+                     sidebarPanel(
+                         selectInput("selected_column", "Choose a column to plot:",
+                                     choices = names(price_data_wide)[-1],
+                                     selected = names(price_data_wide)[2]),
+                         selectInput("selected_year", "Choose a year to display:",
+                                     choices = c("Max", unique(format(price_data_wide$Date, "%Y"))),
+                                     selected = "Max"),
+                         selectInput("theme", "Choose Theme:",
+                                     choices = c("Journal" = "journal", "Superhero" = "superhero"),
+                                     selected = "journal")
+                     ),
+                     mainPanel(
+                         plotlyOutput("graph")
+                     )
+                 )
+        ),
+        
+        # Tab 2: Compare Stocks Page
+        tabPanel("Compare Stocks",
+                 sidebarLayout(
+                     sidebarPanel(
+                         selectInput("primary_stock", "Select the primary stock:",
+                                     choices = names(price_data_wide)[-1],
+                                     selected = names(price_data_wide)[2]),
+                         selectInput("comparison_stock", "Select the comparison stock:",
+                                     choices = names(price_data_wide)[-1],
+                                     selected = names(price_data_wide)[3]),
+                         textInput("input_date", "Enter a starting date (YYYY/MM/DD):",
+                                   placeholder = "YYYY/MM/DD"),
+                         downloadButton("export_data", "Export Data"),
+                         br(), br(),
+                         # Add a button to trigger the modal
+                         actionButton("econometrics_modal", "Run Econometric Analysis")
+                     ),
+                     mainPanel(
+                         plotlyOutput("comparison_graph")
+                     )
+                 )
+        ),
+        
+        # Tab 3: Writeup Page
+        tabPanel("Writeup",
+                 sidebarLayout(
+                     sidebarPanel(
+                         downloadButton("download_pdf", "Download PDF"),
+                         downloadButton("download_word", "Download Word")
+                     ),
+                     mainPanel(
+                         h3("Writeup Content"),
+                         p("This document provides an overview of your stock and macroeconomic analysis. Click the buttons to download.")
+                     )
+                 )
+        )
+    )
+)
+
+# Define server logic
+server <- function(input, output, session) {
+    # Dynamically update the theme
+    output$theme_ui <- renderUI({
+        fluidPage(theme = shinytheme(input$theme))
+    })
+    
+    # Tab 1: Interactive Plot for Selected Stock and Year
+    output$graph <- renderPlotly({
+        filtered_data <- price_data_wide %>%
+            filter(!is.na(.data[[input$selected_column]])) %>%
+            {
+                if (input$selected_year != "Max") {
+                    filter(., format(Date, "%Y") == input$selected_year)
+                } else {
+                    .
+                }
+            }
+        
+        plot_ly(data = filtered_data) %>%
+            add_lines(
+                x = ~Date,
+                y = ~.data[[input$selected_column]],
+                name = input$selected_column,
+                hoverinfo = "text",
+                text = ~paste(
+                    "Date: ", format(Date, "%d/%m/%Y"), "<br>",
+                    "Value: £", round(.data[[input$selected_column]], 2)
+                ),
+                line = list(color = "blue")
+            ) %>%
+            layout(
+                title = paste("Plot of", input$selected_column, 
+                              if (input$selected_year == "Max") "over Entire Period" else paste("for Year", input$selected_year)),
+                xaxis = list(title = "Date", tickformat = "%d/%m/%Y"),
+                yaxis = list(title = "Value (£)"),
+                hoverlabel = list(bgcolor = "white", font = list(size = 12))
+            )
+    })
+    
+    # Tab 2: Comparison Graph
+    output$comparison_graph <- renderPlotly({
+        start_date <- tryCatch(as.Date(input$input_date, format = "%Y/%m/%d"), error = function(e) NA)
+        
+        filtered_data <- price_data_wide %>%
+            filter(!is.na(.data[[input$primary_stock]]), !is.na(.data[[input$comparison_stock]])) %>%
+            {
+                if (!is.na(start_date)) {
+                    filter(., Date >= start_date)
+                } else {
+                    .
+                }
+            } %>%
+            mutate(
+                primary_pct_change = (.data[[input$primary_stock]] / first(.data[[input$primary_stock]]) - 1) * 100,
+                comparison_pct_change = (.data[[input$comparison_stock]] / first(.data[[input$comparison_stock]]) - 1) * 100
+            )
+        
+        plot_ly(data = filtered_data) %>%
+            add_lines(
+                x = ~Date,
+                y = ~primary_pct_change,
+                name = paste("Primary:", input$primary_stock),
+                hoverinfo = "text",
+                text = ~paste(
+                    "Date: ", format(Date, "%d/%m/%Y"), "<br>",
+                    "Primary Percentage Change: ", round(primary_pct_change, 2), "%"
+                ),
+                line = list(color = "blue")
+            ) %>%
+            add_lines(
+                x = ~Date,
+                y = ~comparison_pct_change,
+                name = paste("Comparison:", input$comparison_stock),
+                hoverinfo = "text",
+                text = ~paste(
+                    "Date: ", format(Date, "%d/%m/%Y"), "<br>",
+                    "Comparison Percentage Change: ", round(comparison_pct_change, 2), "%"
+                ),
+                line = list(color = "red")
+            ) %>%
+            layout(
+                title = "Percentage Change Comparison",
+                xaxis = list(title = "Date", tickformat = "%d/%m/%Y"),
+                yaxis = list(title = "Percentage Change (%)"),
+                hoverlabel = list(bgcolor = "white", font = list(size = 12))
+            )
+    })
+    
+    # Show Econometric Analysis Modal
+    observeEvent(input$econometrics_modal, {
+        showModal(modalDialog(
+            title = "Econometric Analysis Options",
+            fluidPage(
+                selectInput("modal_stock1", "Select Stock 1:",
+                            choices = names(price_data_wide)[-1],
+                            selected = names(price_data_wide)[2]),
+                selectInput("modal_stock2", "Select Stock 2:",
+                            choices = names(price_data_wide)[-1],
+                            selected = names(price_data_wide)[3]),
+                dateRangeInput("modal_date_range", "Select Date Range:",
+                               start = min(price_data_wide$Date),
+                               end = max(price_data_wide$Date)),
+                actionButton("run_stationarity", "Run Stationarity Test")
+            ),
+            easyClose = TRUE,
+            footer = modalButton("Close")
+        ))
+    })
+    
+    # Run Stationarity Test
+    observeEvent(input$run_stationarity, {
+        removeModal()
+        
+        stock1_data <- price_data_wide %>%
+            filter(Date >= input$modal_date_range[1] & Date <= input$modal_date_range[2]) %>%
+            select(Date, stock1 = .data[[input$modal_stock1]]) %>%
+            filter(!is.na(stock1)) %>%
+            mutate(stock1 = log(stock1))
+        
+        stock2_data <- price_data_wide %>%
+            filter(Date >= input$modal_date_range[1] & Date <= input$modal_date_range[2]) %>%
+            select(Date, stock2 = .data[[input$modal_stock2]]) %>%
+            filter(!is.na(stock2)) %>%
+            mutate(stock2 = log(stock2))
+        
+        merged_data <- merge(stock1_data, stock2_data, by = "Date")
+        
+        output$stationarity_results <- renderPrint({
+            if (nrow(merged_data) > 5) {
+                adf_stock1 <- tseries::adf.test(merged_data$stock1)
+                adf_stock2 <- tseries::adf.test(merged_data$stock2)
+                list(
+                    Stock1_Stationarity = adf_stock1,
+                    Stock2_Stationarity = adf_stock2
+                )
+            } else {
+                "Not enough data points for stationarity analysis."
+            }
+        })
+        
+        showModal(modalDialog(
+            title = "Stationarity Test Results",
+            verbatimTextOutput("stationarity_results"),
+            easyClose = TRUE,
+            footer = modalButton("Close")
+        ))
+    })
+}
+
+# Run the application
+shinyApp(ui = ui, server = server)
