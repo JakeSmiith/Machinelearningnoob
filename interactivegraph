@@ -1,15 +1,20 @@
 load("~/Machine_learning_noob.RData")
-# Load necessary packages
 library(shiny)
-library(ggplot2)
+library(shinythemes)
+library(plotly)
 library(dplyr)
 library(openxlsx)
 
+# Check if `price_data_wide` exists to prevent crashes
+if (!exists("price_data_wide")) {
+    stop("The dataset `price_data_wide` is missing. Please load the correct data.")
+}
+
 # Define UI
 ui <- fluidPage(
+    uiOutput("theme_ui"),  # Dynamically render the UI with the selected theme
     titlePanel("Interactive Graph Loader"),
     
-    # Tabs for different pages
     tabsetPanel(
         # Tab 1: Main Graph Page
         tabPanel("View Stock",
@@ -20,40 +25,33 @@ ui <- fluidPage(
                                      selected = names(price_data_wide)[2]),
                          selectInput("selected_year", "Choose a year to display:",
                                      choices = c("Max", unique(format(price_data_wide$Date, "%Y"))),
-                                     selected = "Max")
+                                     selected = "Max"),
+                         selectInput("theme", "Choose Theme:",
+                                     choices = c("Journal" = "journal", "Superhero" = "superhero"),
+                                     selected = "journal")
                      ),
                      mainPanel(
-                         plotOutput("graph")
+                         plotlyOutput("graph")
                      )
                  )
         ),
         
         # Tab 2: Compare Stocks Page
         tabPanel("Compare Stocks",
-                 # Use sidebar layout but with plot under inputs
                  sidebarLayout(
                      sidebarPanel(
-                         # Dropdown to select the primary stock
                          selectInput("primary_stock", "Select the primary stock:",
                                      choices = names(price_data_wide)[-1],
                                      selected = names(price_data_wide)[2]),
-                         
-                         # Dropdown to select the comparison stock
                          selectInput("comparison_stock", "Select the comparison stock:",
                                      choices = names(price_data_wide)[-1],
                                      selected = names(price_data_wide)[3]),
-                         
-                         # Text input for date with placeholder format "YYYY/MM/DD"
                          textInput("input_date", "Enter a starting date (YYYY/MM/DD):",
                                    placeholder = "YYYY/MM/DD"),
-                         
-                         # Export button
                          downloadButton("export_data", "Export Data")
                      ),
-                     
-                     # Place the plot underneath the input panel
                      mainPanel(
-                         plotOutput("comparison_graph")
+                         plotlyOutput("comparison_graph")
                      )
                  )
         )
@@ -61,78 +59,97 @@ ui <- fluidPage(
 )
 
 # Define server logic
-server <- function(input, output) {
+server <- function(input, output, session) {
+    # Dynamically update the theme
+    output$theme_ui <- renderUI({
+        fluidPage(theme = shinytheme(input$theme))
+    })
     
-    # Tab 1: Plot for selected stock and year
-    output$graph <- renderPlot({
-        selected_column <- sym(input$selected_column)
-        
-        # Filter based on selected year
+    # Tab 1: Interactive Plot for Selected Stock and Year
+    output$graph <- renderPlotly({
+        # Filter data based on selected year
         filtered_data <- price_data_wide %>%
-            filter(!is.na(!!selected_column)) %>%
+            filter(!is.na(.data[[input$selected_column]])) %>%
             {
                 if (input$selected_year != "Max") {
                     filter(., format(Date, "%Y") == input$selected_year)
                 } else {
                     .
                 }
-            } %>%
-            select(Date, !!selected_column)
+            }
         
-        # Plot
-        if (!is.null(input$selected_column) && nrow(filtered_data) > 0) {
-            ggplot(filtered_data, aes(x = Date, y = !!selected_column)) +
-                geom_line() +
-                labs(
-                    title = paste("Plot of", input$selected_column, 
-                                  if (input$selected_year == "Max") "over Entire Period" else paste("for Year", input$selected_year)),
-                    x = "Date",
-                    y = "Price (£)"
-                ) +
-                scale_x_date(date_labels = if (input$selected_year == "Max") "%Y" else "%b") +
-                theme_minimal()
-        }
+        # Create a Plotly plot with hover data
+        plot_ly(data = filtered_data) %>%
+            add_lines(
+                x = ~Date,
+                y = ~.data[[input$selected_column]],
+                name = input$selected_column,
+                hoverinfo = "text",
+                text = ~paste(
+                    "Date: ", format(Date, "%d/%m/%Y"), "<br>",
+                    "Value: £", round(.data[[input$selected_column]], 2)
+                ),
+                line = list(color = "blue")
+            ) %>%
+            layout(
+                title = paste("Plot of", input$selected_column, 
+                              if (input$selected_year == "Max") "over Entire Period" else paste("for Year", input$selected_year)),
+                xaxis = list(title = "Date", tickformat = "%d/%m/%Y"),
+                yaxis = list(title = "Value (£)"),
+                hoverlabel = list(bgcolor = "white", font = list(size = 12))
+            )
     })
     
-    # Tab 2: Compare Stocks Plot
-    output$comparison_graph <- renderPlot({
-        primary_stock <- sym(input$primary_stock)
-        comparison_stock <- sym(input$comparison_stock)
-        
+    # Tab 2: Interactive Comparison Plot
+    output$comparison_graph <- renderPlotly({
         # Convert input date to Date format
         start_date <- tryCatch(as.Date(input$input_date, format = "%Y/%m/%d"), error = function(e) NA)
         
-        # Filter data for both stocks, drop NA values, and filter based on start date if valid
+        # Filter data and calculate percentage change
         filtered_data <- price_data_wide %>%
-            select(Date, !!primary_stock, !!comparison_stock) %>%
-            filter(!is.na(!!primary_stock), !is.na(!!comparison_stock)) %>%
+            filter(!is.na(.data[[input$primary_stock]]), !is.na(.data[[input$comparison_stock]])) %>%
             {
                 if (!is.na(start_date)) {
                     filter(., Date >= start_date)
                 } else {
                     .
                 }
-            }
-        
-        # Calculate percentage change for each stock
-        filtered_data <- filtered_data %>%
+            } %>%
             mutate(
-                primary_pct_change = (!!primary_stock / first(!!primary_stock) - 1) * 100,
-                comparison_pct_change = (!!comparison_stock / first(!!comparison_stock) - 1) * 100
+                primary_pct_change = (.data[[input$primary_stock]] / first(.data[[input$primary_stock]]) - 1) * 100,
+                comparison_pct_change = (.data[[input$comparison_stock]] / first(.data[[input$comparison_stock]]) - 1) * 100
             )
         
-        # Plot the percentage change comparison with solid lines and specific colors
-        ggplot(filtered_data, aes(x = Date)) +
-            geom_line(aes(y = primary_pct_change, color = input$primary_stock), size = 1) +
-            geom_line(aes(y = comparison_pct_change, color = input$comparison_stock), size = 1) +
-            labs(
-                title = paste("Percentage Change Comparison:", input$primary_stock, "vs", input$comparison_stock),
-                x = "Date",
-                y = "Percentage Change (%)"
-            ) +
-            scale_x_date(date_labels = "%Y") +
-            theme_minimal() +
-            scale_color_manual(values = c("blue", "red"), labels = c(input$primary_stock, input$comparison_stock))
+        # Create a Plotly plot with hover data for both lines
+        plot_ly(data = filtered_data) %>%
+            add_lines(
+                x = ~Date,
+                y = ~primary_pct_change,
+                name = paste("Primary:", input$primary_stock),
+                hoverinfo = "text",
+                text = ~paste(
+                    "Date: ", format(Date, "%d/%m/%Y"), "<br>",
+                    "Primary Percentage Change: ", round(primary_pct_change, 2), "%"
+                ),
+                line = list(color = "blue")
+            ) %>%
+            add_lines(
+                x = ~Date,
+                y = ~comparison_pct_change,
+                name = paste("Comparison:", input$comparison_stock),
+                hoverinfo = "text",
+                text = ~paste(
+                    "Date: ", format(Date, "%d/%m/%Y"), "<br>",
+                    "Comparison Percentage Change: ", round(comparison_pct_change, 2), "%"
+                ),
+                line = list(color = "red")
+            ) %>%
+            layout(
+                title = "Percentage Change Comparison",
+                xaxis = list(title = "Date", tickformat = "%d/%m/%Y"),
+                yaxis = list(title = "Percentage Change (%)"),
+                hoverlabel = list(bgcolor = "white", font = list(size = 12))
+            )
     })
     
     # Export filtered data
@@ -141,17 +158,10 @@ server <- function(input, output) {
             paste("Filtered_Stock_Data_", input$primary_stock, "_vs_", input$comparison_stock, ".xlsx", sep = "")
         },
         content = function(file) {
-            # Define selected stocks as symbols
-            primary_stock <- sym(input$primary_stock)
-            comparison_stock <- sym(input$comparison_stock)
-            
-            # Convert input date to Date format
             start_date <- tryCatch(as.Date(input$input_date, format = "%Y/%m/%d"), error = function(e) NA)
             
-            # Filter data for export based on the starting date and selected stocks
             export_data <- price_data_wide %>%
-                select(Date, !!primary_stock, !!comparison_stock) %>%
-                filter(!is.na(!!primary_stock), !is.na(!!comparison_stock)) %>%
+                filter(!is.na(.data[[input$primary_stock]]), !is.na(.data[[input$comparison_stock]])) %>%
                 {
                     if (!is.na(start_date)) {
                         filter(., Date >= start_date)
@@ -160,14 +170,14 @@ server <- function(input, output) {
                     }
                 }
             
-            # Write the filtered data to an Excel file
             write.xlsx(export_data, file)
         }
     )
 }
 
-# Run the application 
+# Run the application
 shinyApp(ui = ui, server = server)
+
 
 
 # stage - develop permanent web address to show linkedin connections
