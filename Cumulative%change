@@ -1,0 +1,85 @@
+library(shiny)
+library(shinythemes)
+library(plotly)
+library(dplyr)
+
+# Check if `price_data_wide` exists
+if (!exists("price_data_wide")) {
+    stop("The dataset `price_data_wide` is missing. Please load the correct data.")
+}
+
+# Define UI
+ui <- fluidPage(
+    shinytheme("journal"),
+    titlePanel("Cumulative Percentage Change"),
+    
+    sidebarLayout(
+        sidebarPanel(
+            selectInput("primary_stock", "Select the primary stock:",
+                        choices = names(price_data_wide)[-1],
+                        selected = names(price_data_wide)[2]),
+            selectInput("comparison_stock", "Select the comparison stock:",
+                        choices = names(price_data_wide)[-1],
+                        selected = names(price_data_wide)[3]),
+            textInput("input_date", "Enter a starting date (YYYY/MM/DD):",
+                      placeholder = "YYYY/MM/DD")
+        ),
+        mainPanel(
+            plotlyOutput("comparison_graph")
+        )
+    )
+)
+
+# Define server logic
+server <- function(input, output) {
+    output$comparison_graph <- renderPlotly({
+        start_date <- tryCatch(as.Date(input$input_date, format = "%Y/%m/%d"), error = function(e) NA)
+        
+        filtered_data <- price_data_wide %>%
+            filter(!is.na(.data[[input$primary_stock]]), !is.na(.data[[input$comparison_stock]])) %>%
+            {
+                if (!is.na(start_date)) {
+                    filter(., Date >= start_date)
+                } else {
+                    .
+                }
+            } %>%
+            mutate(
+                primary_pct_change = (.data[[input$primary_stock]] / first(.data[[input$primary_stock]]) - 1) * 100,
+                comparison_pct_change = (.data[[input$comparison_stock]] / first(.data[[input$comparison_stock]]) - 1) * 100
+            )
+        
+        plot_ly(data = filtered_data) %>%
+            add_lines(
+                x = ~Date,
+                y = ~primary_pct_change,
+                name = paste("Primary:", input$primary_stock),
+                hoverinfo = "text",
+                text = ~paste(
+                    "Date: ", format(Date, "%d/%m/%Y"), "<br>",
+                    "Primary Percentage Change: ", round(primary_pct_change, 2), "%"
+                ),
+                line = list(color = "blue")
+            ) %>%
+            add_lines(
+                x = ~Date,
+                y = ~comparison_pct_change,
+                name = paste("Comparison:", input$comparison_stock),
+                hoverinfo = "text",
+                text = ~paste(
+                    "Date: ", format(Date, "%d/%m/%Y"), "<br>",
+                    "Comparison Percentage Change: ", round(comparison_pct_change, 2), "%"
+                ),
+                line = list(color = "red")
+            ) %>%
+            layout(
+                title = "Percentage Change Comparison",
+                xaxis = list(title = "Date", tickformat = "%d/%m/%Y"),
+                yaxis = list(title = "Percentage Change (%)"),
+                hoverlabel = list(bgcolor = "white", font = list(size = 12))
+            )
+    })
+}
+
+# Run the application
+shinyApp(ui = ui, server = server)
