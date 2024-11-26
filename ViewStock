@@ -1,0 +1,76 @@
+library(shiny)
+library(shinythemes)
+library(plotly)
+library(dplyr)
+
+# Check if `price_data_wide` exists
+if (!exists("price_data_wide")) {
+    stop("The dataset `price_data_wide` is missing. Please load the correct data.")
+}
+
+# Define UI
+ui <- fluidPage(
+    uiOutput("theme_ui"),  # Dynamically render the UI with the selected theme
+    titlePanel("View Stock"),
+    
+    sidebarLayout(
+        sidebarPanel(
+            selectInput("selected_column", "Choose a column to plot:",
+                        choices = names(price_data_wide)[-1],
+                        selected = names(price_data_wide)[2]),
+            selectInput("selected_year", "Choose a year to display:",
+                        choices = c("Max", unique(format(price_data_wide$Date, "%Y"))),
+                        selected = "Max"),
+            selectInput("theme", "Choose Theme:",
+                        choices = c("Journal" = "journal", "Superhero" = "superhero"),
+                        selected = "journal")
+        ),
+        mainPanel(
+            plotlyOutput("graph")
+        )
+    )
+)
+
+# Define server logic
+server <- function(input, output, session) {
+    # Dynamically update the theme
+    output$theme_ui <- renderUI({
+        fluidPage(theme = shinytheme(input$theme))
+    })
+    
+    # Interactive Plot for Selected Stock and Year
+    output$graph <- renderPlotly({
+        filtered_data <- price_data_wide %>%
+            filter(!is.na(.data[[input$selected_column]])) %>%
+            {
+                if (input$selected_year != "Max") {
+                    filter(., format(Date, "%Y") == input$selected_year)
+                } else {
+                    .
+                }
+            }
+        
+        plot_ly(data = filtered_data) %>%
+            add_lines(
+                x = ~Date,
+                y = ~.data[[input$selected_column]],
+                name = input$selected_column,
+                hoverinfo = "text",
+                text = ~paste(
+                    "Date: ", format(Date, "%d/%m/%Y"), "<br>",
+                    "Value: £", round(.data[[input$selected_column]], 2)
+                ),
+                line = list(color = "blue")
+            ) %>%
+            layout(
+                title = paste("Plot of", input$selected_column, 
+                              if (input$selected_year == "Max") "over Entire Period" else paste("for Year", input$selected_year)),
+                xaxis = list(title = "Date", tickformat = "%d/%m/%Y"),
+                yaxis = list(title = "Value (£)"),
+                hoverlabel = list(bgcolor = "white", font = list(size = 12))
+            )
+    })
+}
+
+# Run the application
+shinyApp(ui = ui, server = server)
