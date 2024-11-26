@@ -2,6 +2,7 @@ library(shiny)
 library(shinythemes)
 library(plotly)
 library(dplyr)
+library(tseries)  # For ADF test
 
 # Check if `price_data_wide` exists
 if (!exists("price_data_wide")) {
@@ -23,7 +24,9 @@ ui <- fluidPage(
                         selected = "Max"),
             selectInput("theme", "Choose Theme:",
                         choices = c("Journal" = "journal", "Superhero" = "superhero"),
-                        selected = "journal")
+                        selected = "journal"),
+            br(),
+            actionButton("causality_check", "Check for Causality")  # New Button
         ),
         mainPanel(
             plotlyOutput("graph")
@@ -70,7 +73,77 @@ server <- function(input, output, session) {
                 hoverlabel = list(bgcolor = "white", font = list(size = 12))
             )
     })
+    
+    # Show Pop-Up for Causality Analysis
+    observeEvent(input$causality_check, {
+        showModal(modalDialog(
+            title = "Causality Analysis",
+            fluidPage(
+                selectInput("stock1", "Select Stock 1:",
+                            choices = names(price_data_wide)[-1],
+                            selected = names(price_data_wide)[2]),
+                selectInput("stock2", "Select Stock 2:",
+                            choices = names(price_data_wide)[-1],
+                            selected = names(price_data_wide)[3]),
+                dateRangeInput("causality_date_range", "Select Date Range:",
+                               start = min(price_data_wide$Date),
+                               end = max(price_data_wide$Date)),
+                actionButton("run_adf", "Run ADF Tests")
+            ),
+            easyClose = TRUE,
+            footer = modalButton("Close")
+        ))
+    })
+    
+    # Run ADF Tests and Determine Order of Integration
+    observeEvent(input$run_adf, {
+        removeModal()  # Close the modal
+        
+        stock1_data <- price_data_wide %>%
+            filter(Date >= input$causality_date_range[1] & Date <= input$causality_date_range[2]) %>%
+            select(Date, stock1 = .data[[input$stock1]]) %>%
+            filter(!is.na(stock1))
+        
+        stock2_data <- price_data_wide %>%
+            filter(Date >= input$causality_date_range[1] & Date <= input$causality_date_range[2]) %>%
+            select(Date, stock2 = .data[[input$stock2]]) %>%
+            filter(!is.na(stock2))
+        
+        find_order_of_integration <- function(data_column) {
+            differences <- 0
+            while (TRUE) {
+                adf_test <- tseries::adf.test(data_column, k = 0)
+                if (adf_test$p.value < 0.05) {
+                    return(differences)
+                }
+                data_column <- diff(data_column, differences = 1)
+                differences <- differences + 1
+                if (differences > 5) {  # Prevent infinite loop
+                    return(NA)
+                }
+            }
+        }
+        
+        stock1_integration <- find_order_of_integration(stock1_data$stock1)
+        stock2_integration <- find_order_of_integration(stock2_data$stock2)
+        
+        output$adf_results <- renderPrint({
+            cat(
+                "ADF Test Results:\n",
+                input$stock1, "Order of Integration:", stock1_integration, "\n",
+                input$stock2, "Order of Integration:", stock2_integration
+            )
+        })
+        
+        showModal(modalDialog(
+            title = "ADF Test Results",
+            verbatimTextOutput("adf_results"),
+            easyClose = TRUE,
+            footer = modalButton("Close")
+        ))
+    })
 }
 
 # Run the application
 shinyApp(ui = ui, server = server)
+
