@@ -9,6 +9,10 @@ if (!exists("price_data_wide")) {
     stop("The dataset `price_data_wide` is missing. Please load the correct data.")
 }
 
+# Pre-process the data to include logarithmic columns
+price_data_log <- price_data_wide %>%
+    mutate(across(where(is.numeric), ~log(.), .names = "log_{col}"))
+
 # Define UI
 ui <- fluidPage(
     uiOutput("theme_ui"),  # Dynamically render the UI with the selected theme
@@ -19,6 +23,9 @@ ui <- fluidPage(
             selectInput("selected_column", "Choose a column to plot:",
                         choices = names(price_data_wide)[-1],
                         selected = names(price_data_wide)[2]),
+            selectInput("comparison_column", "Choose a second column to plot (optional):",
+                        choices = c("None", names(price_data_wide)[-1]),
+                        selected = "None"),
             selectInput("selected_year", "Choose a year to display:",
                         choices = c("Max", unique(format(price_data_wide$Date, "%Y"))),
                         selected = "Max"),
@@ -53,7 +60,7 @@ server <- function(input, output, session) {
                 }
             }
         
-        plot_ly(data = filtered_data) %>%
+        plot <- plot_ly(data = filtered_data) %>%
             add_lines(
                 x = ~Date,
                 y = ~.data[[input$selected_column]],
@@ -64,7 +71,28 @@ server <- function(input, output, session) {
                     "Value: £", round(.data[[input$selected_column]], 2)
                 ),
                 line = list(color = "blue")
-            ) %>%
+            )
+        
+        # Add second column if selected
+        if (input$comparison_column != "None") {
+            filtered_data <- filtered_data %>%
+                filter(!is.na(.data[[input$comparison_column]]))
+            
+            plot <- plot %>%
+                add_lines(
+                    x = ~Date,
+                    y = ~.data[[input$comparison_column]],
+                    name = input$comparison_column,
+                    hoverinfo = "text",
+                    text = ~paste(
+                        "Date: ", format(Date, "%d/%m/%Y"), "<br>",
+                        "Value: £", round(.data[[input$comparison_column]], 2)
+                    ),
+                    line = list(color = "red")
+                )
+        }
+        
+        plot %>%
             layout(
                 title = paste("Plot of", input$selected_column, 
                               if (input$selected_year == "Max") "over Entire Period" else paste("for Year", input$selected_year)),
@@ -80,14 +108,14 @@ server <- function(input, output, session) {
             title = "Causality Analysis",
             fluidPage(
                 selectInput("stock1", "Select Stock 1:",
-                            choices = names(price_data_wide)[-1],
-                            selected = names(price_data_wide)[2]),
+                            choices = names(price_data_log)[-1],
+                            selected = names(price_data_log)[2]),
                 selectInput("stock2", "Select Stock 2:",
-                            choices = names(price_data_wide)[-1],
-                            selected = names(price_data_wide)[3]),
+                            choices = names(price_data_log)[-1],
+                            selected = names(price_data_log)[3]),
                 dateRangeInput("causality_date_range", "Select Date Range:",
-                               start = min(price_data_wide$Date),
-                               end = max(price_data_wide$Date)),
+                               start = min(price_data_log$Date),
+                               end = max(price_data_log$Date)),
                 actionButton("run_adf", "Run ADF Tests")
             ),
             easyClose = TRUE,
@@ -99,39 +127,54 @@ server <- function(input, output, session) {
     observeEvent(input$run_adf, {
         removeModal()  # Close the modal
         
-        stock1_data <- price_data_wide %>%
+        stock1_data <- price_data_log %>%
             filter(Date >= input$causality_date_range[1] & Date <= input$causality_date_range[2]) %>%
             select(Date, stock1 = .data[[input$stock1]]) %>%
             filter(!is.na(stock1))
         
-        stock2_data <- price_data_wide %>%
+        stock2_data <- price_data_log %>%
             filter(Date >= input$causality_date_range[1] & Date <= input$causality_date_range[2]) %>%
             select(Date, stock2 = .data[[input$stock2]]) %>%
             filter(!is.na(stock2))
         
-        find_order_of_integration <- function(data_column) {
+        run_adf_with_steps <- function(data_column) {
             differences <- 0
+            adf_results <- list()
             while (TRUE) {
                 adf_test <- tseries::adf.test(data_column, k = 0)
-                if (adf_test$p.value < 0.05) {
-                    return(differences)
-                }
+                adf_results[[differences + 1]] <- list(
+                    differences = differences,
+                    adf_statistic = adf_test$statistic,
+                    p_value = adf_test$p.value
+                )
+                if (adf_test$p.value < 0.05) break  # Stop when stationary
                 data_column <- diff(data_column, differences = 1)
                 differences <- differences + 1
-                if (differences > 5) {  # Prevent infinite loop
-                    return(NA)
-                }
+                if (differences > 5) break  # Prevent infinite loop
             }
+            adf_results
         }
         
-        stock1_integration <- find_order_of_integration(stock1_data$stock1)
-        stock2_integration <- find_order_of_integration(stock2_data$stock2)
+        stock1_results <- run_adf_with_steps(stock1_data$stock1)
+        stock2_results <- run_adf_with_steps(stock2_data$stock2)
+        
+        format_adf_results <- function(results, stock_name) {
+            paste0(
+                stock_name, " ADF Test Results:\n",
+                paste(sapply(results, function(res) {
+                    paste0(
+                        "Order of Integration: ", res$differences, "\n",
+                        "  - ADF Statistic: ", round(res$adf_statistic, 4), "\n",
+                        "  - P-Value: ", round(res$p_value, 4), "\n"
+                    )
+                }), collapse = "\n")
+            )
+        }
         
         output$adf_results <- renderPrint({
             cat(
-                "ADF Test Results:\n",
-                input$stock1, "Order of Integration:", stock1_integration, "\n",
-                input$stock2, "Order of Integration:", stock2_integration
+                format_adf_results(stock1_results, input$stock1), "\n\n",
+                format_adf_results(stock2_results, input$stock2)
             )
         })
         
@@ -146,4 +189,3 @@ server <- function(input, output, session) {
 
 # Run the application
 shinyApp(ui = ui, server = server)
-
