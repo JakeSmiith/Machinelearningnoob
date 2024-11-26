@@ -1,0 +1,49 @@
+library(shiny)
+library(officer)
+
+# Define UI
+ui <- fluidPage(
+    shinytheme("cosmo"),
+    titlePanel("Writeup"),
+    
+    sidebarLayout(
+        sidebarPanel(
+            downloadButton("download_pdf", "Download PDF"),
+            downloadButton("download_word", "Download Word")
+        ),
+        mainPanel(
+            h3("Writeup Content"),
+            p("This document provides an overview of your stock and macroeconomic analysis.")
+        )
+    )
+)
+
+# Define server logic
+server <- function(input, output) {
+    output$download_pdf <- downloadHandler(
+        filename = function() { paste("Writeup_", Sys.Date(), ".pdf", sep = "") },
+        content = function(file) {
+            temp_report <- file.path(tempdir(), "writeup.Rmd")
+            writeLines(c(
+                "---",
+                "title: 'Writeup Analysis'",
+                "output: pdf_document",
+                "---",
+                "",
+                "This document summarizes stock and macroeconomic analysis."
+            ), temp_report)
+            rmarkdown::render(input = temp_report, output_file = file, clean = TRUE)
+        }
+    )
+    
+    output$download_word <- downloadHandler(
+        filename = function() { paste("Writeup_", Sys.Date(), ".docx", sep = "") },
+        content = function(file) {
+            doc <- read_docx() %>% body_add_par("This is your analysis summary.", style = "Normal")
+            print(doc, target = file)
+        }
+    )
+}
+
+# Run the application
+shinyApp(ui = ui, server = server)
