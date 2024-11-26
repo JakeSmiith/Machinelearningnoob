@@ -2,7 +2,10 @@ library(shiny)
 library(shinythemes)
 library(plotly)
 library(dplyr)
-library(tseries)  # For ADF test
+library(tseries)
+library(vars)  # For Granger Causality
+library(urca)  # For Cointegration test
+library(colourpicker)
 
 # Check if `price_data_wide` exists
 if (!exists("price_data_wide")) {
@@ -15,9 +18,8 @@ price_data_log <- price_data_wide %>%
 
 # Define UI
 ui <- fluidPage(
-    uiOutput("theme_ui"),  # Dynamically render the UI with the selected theme
+    uiOutput("theme_ui"),
     titlePanel("View Stock"),
-    
     sidebarLayout(
         sidebarPanel(
             selectInput("selected_column", "Choose a column to plot:",
@@ -32,8 +34,10 @@ ui <- fluidPage(
             selectInput("theme", "Choose Theme:",
                         choices = c("Journal" = "journal", "Superhero" = "superhero"),
                         selected = "journal"),
+            colourInput("primary_color", "Select Primary Plot Color:", value = "#0000FF"),
+            colourInput("comparison_color", "Select Comparison Plot Color:", value = "#FF0000"),
             br(),
-            actionButton("causality_check", "Check for Causality")  # New Button
+            actionButton("causality_check", "Check for Causality")
         ),
         mainPanel(
             plotlyOutput("graph")
@@ -41,14 +45,13 @@ ui <- fluidPage(
     )
 )
 
-# Define server logic
 server <- function(input, output, session) {
     # Dynamically update the theme
     output$theme_ui <- renderUI({
         fluidPage(theme = shinytheme(input$theme))
     })
     
-    # Interactive Plot for Selected Stock and Year
+    # Interactive Plot
     output$graph <- renderPlotly({
         filtered_data <- price_data_wide %>%
             filter(!is.na(.data[[input$selected_column]])) %>%
@@ -59,133 +62,180 @@ server <- function(input, output, session) {
                     .
                 }
             }
-        
         plot <- plot_ly(data = filtered_data) %>%
             add_lines(
                 x = ~Date,
                 y = ~.data[[input$selected_column]],
                 name = input$selected_column,
+                line = list(color = input$primary_color),
                 hoverinfo = "text",
                 text = ~paste(
-                    "Date: ", format(Date, "%d/%m/%Y"), "<br>",
-                    "Value: £", round(.data[[input$selected_column]], 2)
-                ),
-                line = list(color = "blue")
+                    "Date: ", format(Date, "%b %Y"), "<br>",
+                    "Value: £", sprintf("%.2f", .data[[input$selected_column]])
+                )
             )
-        
-        # Add second column if selected
         if (input$comparison_column != "None") {
-            filtered_data <- filtered_data %>%
-                filter(!is.na(.data[[input$comparison_column]]))
-            
             plot <- plot %>%
                 add_lines(
                     x = ~Date,
                     y = ~.data[[input$comparison_column]],
                     name = input$comparison_column,
+                    line = list(color = input$comparison_color),
                     hoverinfo = "text",
                     text = ~paste(
-                        "Date: ", format(Date, "%d/%m/%Y"), "<br>",
-                        "Value: £", round(.data[[input$comparison_column]], 2)
-                    ),
-                    line = list(color = "red")
+                        "Date: ", format(Date, "%b %Y"), "<br>",
+                        "Value: £", sprintf("%.2f", .data[[input$comparison_column]])
+                    )
                 )
         }
-        
         plot %>%
             layout(
-                title = paste("Plot of", input$selected_column, 
-                              if (input$selected_year == "Max") "over Entire Period" else paste("for Year", input$selected_year)),
-                xaxis = list(title = "Date", tickformat = "%d/%m/%Y"),
-                yaxis = list(title = "Value (£)"),
-                hoverlabel = list(bgcolor = "white", font = list(size = 12))
+                title = paste("Plot of", input$selected_column),
+                hoverlabel = list(bgcolor = "white", font = list(color = "black"))
             )
     })
     
-    # Show Pop-Up for Causality Analysis
+    # Pop-Up for Causality Analysis
     observeEvent(input$causality_check, {
         showModal(modalDialog(
             title = "Causality Analysis",
-            fluidPage(
-                selectInput("stock1", "Select Stock 1:",
-                            choices = names(price_data_log)[-1],
-                            selected = names(price_data_log)[2]),
-                selectInput("stock2", "Select Stock 2:",
-                            choices = names(price_data_log)[-1],
-                            selected = names(price_data_log)[3]),
-                dateRangeInput("causality_date_range", "Select Date Range:",
-                               start = min(price_data_log$Date),
-                               end = max(price_data_log$Date)),
-                actionButton("run_adf", "Run ADF Tests")
+            fluidRow(
+                column(6, selectInput("stock1", "Select Stock 1:", choices = names(price_data_log)[-1])),
+                column(6, selectInput("stock2", "Select Stock 2:", choices = names(price_data_log)[-1]))
             ),
+            dateRangeInput("causality_date_range", "Select Date Range:", 
+                           start = min(price_data_log$Date), 
+                           end = max(price_data_log$Date)),
+            actionButton("run_adf", "Run ADF Tests"),
             easyClose = TRUE,
             footer = modalButton("Close")
         ))
     })
     
-    # Run ADF Tests and Determine Order of Integration
+    # Reactive Values for Managing State
+    causality_data <- reactiveValues(stock1_data = NULL, stock2_data = NULL, stock1_results = NULL, stock2_results = NULL)
+    
+    # ADF Tests
     observeEvent(input$run_adf, {
-        removeModal()  # Close the modal
-        
-        stock1_data <- price_data_log %>%
+        causality_data$stock1_data <- price_data_log %>%
             filter(Date >= input$causality_date_range[1] & Date <= input$causality_date_range[2]) %>%
-            select(Date, stock1 = .data[[input$stock1]]) %>%
-            filter(!is.na(stock1))
-        
-        stock2_data <- price_data_log %>%
+            pull(input$stock1)
+        causality_data$stock2_data <- price_data_log %>%
             filter(Date >= input$causality_date_range[1] & Date <= input$causality_date_range[2]) %>%
-            select(Date, stock2 = .data[[input$stock2]]) %>%
-            filter(!is.na(stock2))
+            pull(input$stock2)
         
-        run_adf_with_steps <- function(data_column) {
+        run_adf <- function(data) {
             differences <- 0
-            adf_results <- list()
             while (TRUE) {
-                adf_test <- tseries::adf.test(data_column, k = 0)
-                adf_results[[differences + 1]] <- list(
-                    differences = differences,
-                    adf_statistic = adf_test$statistic,
-                    p_value = adf_test$p.value
-                )
-                if (adf_test$p.value < 0.05) break  # Stop when stationary
-                data_column <- diff(data_column, differences = 1)
+                test <- adf.test(data, k = 0)
+                if (test$p.value < 0.05 || differences >= 5) break
+                data <- diff(data)
                 differences <- differences + 1
-                if (differences > 5) break  # Prevent infinite loop
             }
-            adf_results
+            list(order = differences, p_value = test$p.value, statistic = test$statistic)
         }
         
-        stock1_results <- run_adf_with_steps(stock1_data$stock1)
-        stock2_results <- run_adf_with_steps(stock2_data$stock2)
-        
-        format_adf_results <- function(results, stock_name) {
-            paste0(
-                stock_name, " ADF Test Results:\n",
-                paste(sapply(results, function(res) {
-                    paste0(
-                        "Order of Integration: ", res$differences, "\n",
-                        "  - ADF Statistic: ", round(res$adf_statistic, 4), "\n",
-                        "  - P-Value: ", round(res$p_value, 4), "\n"
-                    )
-                }), collapse = "\n")
-            )
-        }
-        
-        output$adf_results <- renderPrint({
-            cat(
-                format_adf_results(stock1_results, input$stock1), "\n\n",
-                format_adf_results(stock2_results, input$stock2)
-            )
-        })
+        causality_data$stock1_results <- run_adf(causality_data$stock1_data)
+        causality_data$stock2_results <- run_adf(causality_data$stock2_data)
         
         showModal(modalDialog(
             title = "ADF Test Results",
-            verbatimTextOutput("adf_results"),
-            easyClose = TRUE,
-            footer = modalButton("Close")
+            HTML(paste0(
+                "<b>", input$stock1, ":</b> Order of Integration: ", causality_data$stock1_results$order, 
+                " (P-Value: ", round(causality_data$stock1_results$p_value, 4), ")<br>",
+                "<b>", input$stock2, ":</b> Order of Integration: ", causality_data$stock2_results$order, 
+                " (P-Value: ", round(causality_data$stock2_results$p_value, 4), ")<br>"
+            )),
+            footer = tagList(
+                modalButton("Close"),
+                if (causality_data$stock1_results$order == causality_data$stock2_results$order) {
+                    actionButton("cointegration_test", "Test for Cointegration")
+                } else {
+                    actionButton("granger_test", "Granger Causality")
+                }
+            )
         ))
+    })
+    
+    # Cointegration Test
+    observeEvent(input$cointegration_test, {
+        coint_data <- cbind(
+            stock1 = as.numeric(causality_data$stock1_data),
+            stock2 = as.numeric(causality_data$stock2_data)
+        )
+        
+        coint_data <- na.omit(coint_data)
+        if (!is.matrix(coint_data) || ncol(coint_data) != 2 || any(!is.finite(coint_data))) {
+            showModal(modalDialog(
+                title = "Error",
+                "Cointegration test requires two valid numeric time series with no missing values.",
+                easyClose = TRUE,
+                footer = modalButton("Close")
+            ))
+            return(NULL)
+        }
+        
+        tryCatch({
+            coint_test <- ca.jo(coint_data, type = "trace", ecdet = "const", K = 2)
+            showModal(modalDialog(
+                title = "Cointegration Test Results",
+                HTML(paste0(
+                    "Test Statistic: ", round(summary(coint_test)@teststat[1], 4), "<br>",
+                    "Critical Value: ", round(summary(coint_test)@cval[1, 1], 4), "<br>",
+                    ifelse(summary(coint_test)@teststat[1] > summary(coint_test)@cval[1, 1], 
+                           "Cointegrated", "Not Cointegrated")
+                )),
+                footer = modalButton("Close")
+            ))
+        }, error = function(e) {
+            showModal(modalDialog(
+                title = "Error",
+                "An error occurred while running the Cointegration test. Please ensure the data is valid.",
+                easyClose = TRUE,
+                footer = modalButton("Close")
+            ))
+        })
+    })
+    
+    # Granger Causality Test
+    observeEvent(input$granger_test, {
+        tryCatch({
+            var_model <- VAR(cbind(causality_data$stock1_data, causality_data$stock2_data), p = 2)
+            granger_y1_cause_y2 <- causality(var_model, cause = "y1")
+            granger_y2_cause_y1 <- causality(var_model, cause = "y2")
+            
+            p_value_y1_cause_y2 <- granger_y1_cause_y2$Granger[["p.value"]]
+            p_value_y2_cause_y1 <- granger_y2_cause_y1$Granger[["p.value"]]
+            
+            relationship <- if (p_value_y1_cause_y2 < 0.05 & p_value_y2_cause_y1 < 0.05) {
+                "Bidirectional Relationship"
+            } else if (p_value_y1_cause_y2 < 0.05) {
+                "Unidirectional: Stock 1 Granger-causes Stock 2"
+            } else if (p_value_y2_cause_y1 < 0.05) {
+                "Unidirectional: Stock 2 Granger-causes Stock 1"
+            } else {
+                "No Granger Causal Relationship"
+            }
+            
+            showModal(modalDialog(
+                title = "Granger Causality Test Results",
+                HTML(paste0(
+                    "<b>Granger Causality Test Summary:</b><br>",
+                    "<b>Stock 1 -> Stock 2:</b> P-Value = ", round(p_value_y1_cause_y2, 4), "<br>",
+                    "<b>Stock 2 -> Stock 1:</b> P-Value = ", round(p_value_y2_cause_y1, 4), "<br><br>",
+                    "<b>Conclusion:</b> ", relationship
+                )),
+                footer = modalButton("Close")
+            ))
+        }, error = function(e) {
+            showModal(modalDialog(
+                title = "Error",
+                "An error occurred during the Granger Causality Test. Please check the data and try again.",
+                easyClose = TRUE,
+                footer = modalButton("Close")
+            ))
+        })
     })
 }
 
-# Run the application
 shinyApp(ui = ui, server = server)
