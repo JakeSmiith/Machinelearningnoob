@@ -1,0 +1,176 @@
+library(shiny)
+library(chromote)
+library(rvest)
+library(rmarkdown)
+
+# Clean and preprocess text
+clean_content <- function(text) {
+  text <- gsub("\n", " ", text)  # Remove newlines
+  text <- gsub("[^[:alnum:][:space:].,]", "", text)  # Remove special characters
+  text <- gsub("\\s+", " ", text)  # Remove extra spaces
+  return(text)
+}
+
+# Financially weighted summarisation in chronological order
+summarise_financial <- function(text, n = 5) {
+  # Financial terms to prioritise
+  financial_terms <- c("revenue", "profit", "growth", "earnings", "loss", 
+                       "income", "investment", "debt", "forecast", "market", 
+                       "stock", "dividend", "price", "yield", "cost")
+
+  # Split text into sentences
+  sentences <- unlist(strsplit(text, "(?<=[.!?])\\s", perl = TRUE))
+
+  # Tokenise text into words
+  words <- unlist(strsplit(tolower(text), "\\W+"))
+  
+  # Calculate word frequencies
+  word_freq <- table(words)
+  
+  # Boost frequencies of financial terms
+  boosted_freq <- word_freq
+  boosted_freq[names(boosted_freq) %in% financial_terms] <- 
+    boosted_freq[names(boosted_freq) %in% financial_terms] * 2
+
+  # Score each sentence based on boosted word frequencies
+  sentence_scores <- sapply(sentences, function(sentence) {
+    sentence_words <- tolower(unlist(strsplit(sentence, "\\W+")))
+    sum(boosted_freq[sentence_words], na.rm = TRUE)
+  })
+
+  # Select top-scoring sentences while preserving their original order
+  ranked_sentences <- order(-sentence_scores)[1:n]
+  top_sentences <- sentences[ranked_sentences]
+  top_sentences <- sentences[sort(ranked_sentences)]  # Sort to maintain chronological order
+
+  # Format as bullet points
+  bullet_points <- paste0("- ", top_sentences, collapse = "\n")
+  return(bullet_points)
+}
+
+# Fetch and summarise content
+fetch_and_summarise <- function(url) {
+  tryCatch({
+    # Launch a headless Chrome browser session
+    b <- ChromoteSession$new()
+    b$Page$navigate(url)
+    Sys.sleep(5)  # Wait for JavaScript to load
+    
+    # Get the full page source after JavaScript rendering
+    page_source <- b$Runtime$evaluate("document.documentElement.outerHTML")$result$value
+    b$close()  # Close the browser session
+
+    # Parse and extract content
+    page <- read_html(page_source)
+    content <- page %>% html_nodes("p") %>% html_text() %>% paste(collapse = " ")
+    content <- clean_content(content)
+
+    if (nchar(content) < 50) {
+      return("Insufficient content extracted for summarisation.")
+    }
+
+    # Summarise the content using financially weighted scoring
+    summary <- tryCatch({
+      summarise_financial(content, n = 5)  # Extract top 5 sentences as bullet points
+    }, error = function(e) {
+      "Could not summarise content."
+    })
+
+    return(summary)
+  }, error = function(e) {
+    return("Error fetching content from the URL.")
+  })
+}
+
+# Generate RMarkdown and render it
+generate_rmarkdown <- function(basket) {
+  summaries <- sapply(basket, fetch_and_summarise)
+  
+  # Create R Markdown content
+  content <- c(
+    "---",
+    "title: \"News Summaries\"",
+    "output: html_document",
+    "---",
+    "",
+    "## Summarised News Articles",
+    "",
+    paste(sapply(seq_along(basket), function(i) {
+      paste0("### Article ", i, "\n\n", 
+             "**URL:** ", basket[i], "\n\n",
+             "**Summary:** \n", summaries[i], "\n\n")
+    }), collapse = "\n")
+  )
+  
+  # Write R Markdown file
+  rmd_file <- "news_summaries.Rmd"
+  output_file <- "news_summaries.html"
+  
+  writeLines(content, rmd_file)
+  
+  # Render R Markdown
+  rmarkdown::render(rmd_file, output_format = "html_document", output_file = output_file)
+  
+  # Automatically open the report in the default browser
+  browseURL(file.path(getwd(), output_file))
+}
+
+# UI
+ui <- fluidPage(
+    titlePanel("News Summariser with Financial Ranking and Bullet Points"),
+    sidebarLayout(
+        sidebarPanel(
+            textInput("url", "Add a News URL:", placeholder = "Enter the URL here"),
+            actionButton("add_url", "Add to Basket"),
+            actionButton("generate_report", "Generate RMarkdown Report"),
+            br(),
+            br(),
+            h4("Basket of URLs"),
+            tableOutput("url_table")
+        ),
+        mainPanel(
+            h4("Generated Report Status"),
+            verbatimTextOutput("report_status")
+        )
+    )
+)
+
+# Server
+server <- function(input, output, session) {
+    # Reactive value to store the basket of URLs
+    basket <- reactiveVal(list())
+    
+    # Add URL to basket
+    observeEvent(input$add_url, {
+        new_url <- input$url
+        if (nzchar(new_url)) {
+            basket(c(basket(), new_url))
+        }
+    })
+    
+    # Display the basket of URLs
+    output$url_table <- renderTable({
+        data.frame(Added_URLs = basket())
+    })
+    
+    # Generate report when button is clicked
+    observeEvent(input$generate_report, {
+        urls <- basket()
+        if (length(urls) == 0) {
+            output$report_status <- renderText("No URLs added to the basket. Please add some news articles.")
+            return()
+        }
+        
+        # Fetch, summarise, and generate RMarkdown
+        output$report_status <- renderText("Fetching articles and generating the report...")
+        tryCatch({
+            generate_rmarkdown(urls)
+            output$report_status <- renderText("Report generated successfully! The file has been opened in your default browser.")
+        }, error = function(e) {
+            output$report_status <- renderText(paste("Error generating report:", e$message))
+        })
+    })
+}
+
+# Run the Shiny app
+shinyApp(ui, server)
