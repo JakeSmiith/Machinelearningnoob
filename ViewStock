@@ -107,6 +107,11 @@ server <- function(input, output, session) {
             dateRangeInput("causality_date_range", "Select Date Range:", 
                            start = min(price_data_log$Date), 
                            end = max(price_data_log$Date)),
+            selectInput("lag_method", "Choose Optimal Lag Length:", 
+                        choices = c("Akaike Information Criterion (AIC)" = "AIC", 
+                                    "Bayesian Information Criterion (BIC)" = "BIC",
+                                    "Hannan-Quinn Criterion (HQC)" = "HQC"),
+                        selected = "AIC"),
             actionButton("run_adf", "Run ADF Tests"),
             easyClose = TRUE,
             footer = modalButton("Close")
@@ -240,4 +245,3 @@ server <- function(input, output, session) {
 }
 
 shinyApp(ui = ui, server = server)
-
