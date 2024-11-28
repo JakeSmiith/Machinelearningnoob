@@ -43,7 +43,7 @@ summarise_financial <- function(text, n = 5) {
   top_sentences <- sentences[ranked_sentences]
   top_sentences <- sentences[sort(ranked_sentences)]  # Sort to maintain chronological order
 
-  # Format as bullet points
+  # Format as Markdown-compatible bullet points
   bullet_points <- paste0("- ", top_sentences, collapse = "\n")
   return(bullet_points)
 }
@@ -98,7 +98,7 @@ generate_rmarkdown <- function(basket) {
     paste(sapply(seq_along(basket), function(i) {
       paste0("### Article ", i, "\n\n", 
              "**URL:** ", basket[i], "\n\n",
-             "**Summary:** \n", summaries[i], "\n\n")
+             "**Summary:** \n\n", summaries[i], "\n\n")
     }), collapse = "\n")
   )
   
