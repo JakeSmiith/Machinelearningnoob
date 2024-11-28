@@ -18,11 +18,24 @@ write.csv(csv_data, file_path, row.names = FALSE)
 # Check if the file is written successfully
 print("File written to Downloads folder with updated header.")
 
+# Ensure the directory exists
+if (!dir.exists("C:/Users/jakes/Downloads")) {
+    stop("Directory does not exist")
+}
+
+# Assuming 'sp500_constituents' contains a column 'Member Ticker and Exchange Code' with tickers
+# Extract only the first word (ticker) from each entry
+tickers <- sapply(strsplit(sp500_constituents$`Member Ticker and Exchange Code`, " "), `[`, 1)
+
+# Write the list of tickers to a CSV in the Downloads folder
+file_path <- "C:/Users/jakes/Downloads/sp500_tickers.csv"
+write.csv(data.frame(sp500_tickers = tickers), file_path, row.names = FALSE)
+
+# Check if the file is written successfully
+print("File written to Downloads folder with updated tickers.")
 
 # Install necessary packages (only run once, or manually install them)
-install.packages(c("shiny", "dplyr", "shinydashboard", "DT"))
-install.packages("httr")
-install.packages("jsonlite")
+install.packages(c("shiny", "dplyr", "shinydashboard", "DT", "httr", "jsonlite"))
 
 # Load necessary libraries
 library(shiny)
@@ -35,93 +48,143 @@ library(jsonlite)
 # Set up your NewsAPI Key (replace with your actual key)
 news_api_key <- "cfb7ab68ee624955b00bd2a04be15f65"
 
-# Example list of S&P 500 companies (use real tickers or import from an external file)
-sp500_companies <- c("AAPL" = "Apple Inc", 
-                     "GOOGL" = "Alphabet Inc", 
-                     "MSFT" = "Microsoft Corp", 
-                     "AMZN" = "Amazon.com Inc", 
-                     "TSLA" = "Tesla Inc")
+# Load the list of S&P 500 tickers from a CSV
+sp500_tickers <- read.csv("C:/Users/jakes/Downloads/sp500_tickers.csv", stringsAsFactors = FALSE)
 
 # Define UI for the Shiny app
 ui <- dashboardPage(
-  dashboardHeader(title = "S&P500 News Scraper"),
-  dashboardSidebar(
-    textInput("company", 
-              "Enter Ticker Symbol:",
-              value = "AAPL"),
-    actionButton("scrape_news", "Get News Articles")
-  ),
-  dashboardBody(
-    fluidRow(
-      box(title = "News Articles", width = 12, 
-          DT::dataTableOutput("news_table"))
+    dashboardHeader(title = "S&P500 News Scraper"),
+    dashboardSidebar(
+        selectInput("company", 
+                    "Select Company:",
+                    choices = sp500_tickers$sp500_tickers, # Dropdown for S&P 500 companies
+                    selected = "AAPL"),
+        actionButton("scrape_news", "Get News Articles")
+    ),
+    dashboardBody(
+        fluidRow(
+            box(title = "News Articles", width = 12, 
+                DT::dataTableOutput("news_table"))
+        )
     )
-  )
 )
 
 # Define server logic for the Shiny app
 server <- function(input, output, session) {
-
-  # Function to fetch news using NewsAPI
-  fetch_news <- function(company_ticker) {
-    # Construct the NewsAPI endpoint URL
-    url <- paste0("https://newsapi.org/v2/everything?q=", company_ticker, 
-                  "&from=", Sys.Date() - 30,  # Get news from the last month
-                  "&to=", Sys.Date(), 
-                  "&apiKey=", news_api_key)
     
-    # Make a GET request to the NewsAPI
-    response <- GET(url)
-    
-    # Check if the request was successful
-    if (response$status_code != 200) {
-      stop("Error in fetching news data. Status code: ", response$status_code)
+    # Function to fetch news using NewsAPI
+    fetch_news <- function(company_ticker) {
+        # Validate the company_ticker
+        if (is.null(company_ticker) || company_ticker == "") {
+            showModal(modalDialog(
+                title = "Error",
+                "Please select a valid company ticker.",
+                easyClose = TRUE,
+                footer = modalButton("Close")
+            ))
+            return(NULL)
+        }
+        
+        # Encode the ticker to ensure it's safe for URLs
+        encoded_ticker <- URLencode(company_ticker)
+        
+        # Construct the NewsAPI endpoint URL
+        url <- paste0(
+            "https://newsapi.org/v2/everything?q=", encoded_ticker,
+            "&from=", Sys.Date() - 30,  # Get news from the last month
+            "&to=", Sys.Date(),
+            "&language=en",            # Include only English results
+            "&apiKey=", news_api_key
+        )
+        
+        # Print the URL for debugging purposes
+        print(paste("Fetching news from URL:", url))
+        
+        # Make a GET request to the NewsAPI
+        response <- tryCatch({
+            GET(url)
+        }, error = function(e) {
+            showModal(modalDialog(
+                title = "Error",
+                paste("Error in sending request to NewsAPI:", e$message),
+                easyClose = TRUE,
+                footer = modalButton("Close")
+            ))
+            return(NULL)
+        })
+        
+        # Check if the request was successful
+        if (is.null(response) || response$status_code != 200) {
+            showModal(modalDialog(
+                title = "Error",
+                paste("Error in fetching news data. Status code: ", response$status_code),
+                easyClose = TRUE,
+                footer = modalButton("Close")
+            ))
+            return(NULL)
+        }
+        
+        # Parse the response
+        news_data <- tryCatch({
+            fromJSON(content(response, "text", encoding = "UTF-8"))
+        }, error = function(e) {
+            showModal(modalDialog(
+                title = "Error",
+                paste("Error in parsing response from NewsAPI:", e$message),
+                easyClose = TRUE,
+                footer = modalButton("Close")
+            ))
+            return(NULL)
+        })
+        
+        # Check if the response contains articles
+        if (is.null(news_data$articles) || length(news_data$articles) == 0) {
+            showModal(modalDialog(
+                title = "No Articles Found",
+                "No news articles found for this company.",
+                easyClose = TRUE,
+                footer = modalButton("Close")
+            ))
+            return(NULL)
+        }
+        
+        # Prepare the data for display
+        news_articles <- data.frame(
+            Title = news_data$articles$title,
+            Description = news_data$articles$description,
+            Link = news_data$articles$url,
+            PublishedAt = news_data$articles$publishedAt,
+            stringsAsFactors = FALSE
+        )
+        
+        # Return the news data
+        return(news_articles)
     }
     
-    # Parse the response
-    news_data <- fromJSON(content(response, "text", encoding = "UTF-8"))
+    # When the user clicks the button, fetch and display news
+    observeEvent(input$scrape_news, {
+        news_data <- fetch_news(input$company)
+        
+        if (!is.null(news_data)) {
+            # Display the news articles in a table
+            output$news_table <- DT::renderDataTable({
+                DT::datatable(news_data, escape = FALSE, selection = 'single',
+                              options = list(pageLength = 5,
+                                             lengthMenu = c(5, 10, 25)))
+            })
+        }
+    })
     
-    # Check if the response contains articles
-    if (length(news_data$articles) == 0) {
-      stop("No news articles found for this company.")
-    }
-    
-    # Prepare the data for display
-    news_articles <- data.frame(
-      Title = news_data$articles$title,
-      Description = news_data$articles$description,
-      Link = news_data$articles$url,
-      PublishedAt = news_data$articles$publishedAt,
-      stringsAsFactors = FALSE
-    )
-    
-    # Return the news data
-    return(news_articles)
-  }
-
-  # When the user clicks the button, fetch and display news
-  observeEvent(input$scrape_news, {
-    news_data <- fetch_news(input$company)
-    
-    if (!is.null(news_data)) {
-      # Display the news articles in a table
-      output$news_table <- DT::renderDataTable({
-        DT::datatable(news_data, escape = FALSE, selection = 'single',
-                      options = list(pageLength = 5, 
-                                     lengthMenu = c(5, 10, 25)))
-      })
-    }
-  })
-  
-  # When the user clicks on a news article, open the link in the browser
-  observeEvent(input$news_table_rows_selected, {
-    row <- input$news_table_rows_selected
-    if (length(row) > 0) {
-      selected_url <- output$news_table$data[row, "Link"]
-      browseURL(selected_url)
-    }
-  })
+    # When the user clicks on a news article, open the link in the browser
+    observeEvent(input$news_table_rows_selected, {
+        row <- input$news_table_rows_selected
+        if (length(row) > 0) {
+            selected_url <- output$news_table$data[row, "Link"]
+            browseURL(selected_url)
+        }
+    })
 }
 
 # Run the Shiny app with a fixed port
 shinyApp(ui, server, options = list(port = 5000))  # Fixed port 5000, change if needed
+
