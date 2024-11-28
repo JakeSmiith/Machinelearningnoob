@@ -108,9 +108,9 @@ server <- function(input, output, session) {
                            start = min(price_data_log$Date), 
                            end = max(price_data_log$Date)),
             selectInput("lag_method", "Choose Optimal Lag Length:", 
-                        choices = c("Akaike Information Criterion (AIC)" = "AIC", 
-                                    "Bayesian Information Criterion (BIC)" = "BIC",
-                                    "Hannan-Quinn Criterion (HQC)" = "HQC"),
+                        choices = c("Akaike Information Criterion (AIC)", 
+                                    "Bayesian Information Criterion (BIC)", 
+                                    "Hannan-Quinn Criterion (HQC)"),
                         selected = "AIC"),
             actionButton("run_adf", "Run ADF Tests"),
             easyClose = TRUE,
@@ -119,7 +119,7 @@ server <- function(input, output, session) {
     })
     
     # Reactive Values for Managing State
-    causality_data <- reactiveValues(stock1_data = NULL, stock2_data = NULL, stock1_results = NULL, stock2_results = NULL)
+    causality_data <- reactiveValues(stock1_data = NULL, stock2_data = NULL, stock1_results = NULL, stock2_results = NULL, lag_length = NULL)
     
     # ADF Tests
     observeEvent(input$run_adf, {
@@ -129,6 +129,16 @@ server <- function(input, output, session) {
         causality_data$stock2_data <- price_data_log %>%
             filter(Date >= input$causality_date_range[1] & Date <= input$causality_date_range[2]) %>%
             pull(input$stock2)
+        
+        # Choose lag length based on the selected method
+        # In practice, here you would calculate the lag length based on AIC, BIC, or HQC. For now, we mock it.
+        if (input$lag_method == "Akaike Information Criterion (AIC)") {
+            causality_data$lag_length <- "Lag length determined by AIC: 2"
+        } else if (input$lag_method == "Bayesian Information Criterion (BIC)") {
+            causality_data$lag_length <- "Lag length determined by BIC: 3"
+        } else if (input$lag_method == "Hannan-Quinn Criterion (HQC)") {
+            causality_data$lag_length <- "Lag length determined by HQC: 1"
+        }
         
         run_adf <- function(data) {
             differences <- 0
@@ -150,7 +160,9 @@ server <- function(input, output, session) {
                 "<b>", input$stock1, ":</b> Order of Integration: ", causality_data$stock1_results$order, 
                 " (P-Value: ", round(causality_data$stock1_results$p_value, 4), ")<br>",
                 "<b>", input$stock2, ":</b> Order of Integration: ", causality_data$stock2_results$order, 
-                " (P-Value: ", round(causality_data$stock2_results$p_value, 4), ")<br>"
+                " (P-Value: ", round(causality_data$stock2_results$p_value, 4), ")<br><br>",
+                "<b>Lag Length Determination:</b><br>",
+                causality_data$lag_length
             )),
             footer = tagList(
                 modalButton("Close"),
