@@ -1,3 +1,24 @@
+# Ensure the directory exists
+if (!dir.exists("C:/Users/jakes/Downloads")) {
+    stop("Directory does not exist")
+}
+
+# Assuming 'sp500_constituents' contains a column 'Member Ticker and Exchange Code' with tickers
+# Write the list of tickers to a CSV in the Downloads folder
+file_path <- "C:/Users/jakes/Downloads/sp500_tickers.csv"
+write.csv(sp500_constituents$`Member Ticker and Exchange Code`, 
+          file_path, 
+          row.names = FALSE)
+
+# Replace "x" in the first cell (A1) with "sp500_tickers"
+csv_data <- read.csv(file_path, stringsAsFactors = FALSE)
+colnames(csv_data)[1] <- "sp500_tickers"
+write.csv(csv_data, file_path, row.names = FALSE)
+
+# Check if the file is written successfully
+print("File written to Downloads folder with updated header.")
+
+
 # Install necessary packages (only run once, or manually install them)
 install.packages(c("shiny", "dplyr", "shinydashboard", "DT"))
 install.packages("httr")
