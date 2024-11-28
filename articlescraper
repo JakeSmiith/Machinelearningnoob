@@ -1,0 +1,106 @@
+# Install necessary packages (only run once, or manually install them)
+install.packages(c("shiny", "dplyr", "shinydashboard", "DT"))
+install.packages("httr")
+install.packages("jsonlite")
+
+# Load necessary libraries
+library(shiny)
+library(dplyr)
+library(shinydashboard)
+library(DT)
+library(httr)
+library(jsonlite)
+
+# Set up your NewsAPI Key (replace with your actual key)
+news_api_key <- "cfb7ab68ee624955b00bd2a04be15f65"
+
+# Example list of S&P 500 companies (use real tickers or import from an external file)
+sp500_companies <- c("AAPL" = "Apple Inc", 
+                     "GOOGL" = "Alphabet Inc", 
+                     "MSFT" = "Microsoft Corp", 
+                     "AMZN" = "Amazon.com Inc", 
+                     "TSLA" = "Tesla Inc")
+
+# Define UI for the Shiny app
+ui <- dashboardPage(
+  dashboardHeader(title = "S&P500 News Scraper"),
+  dashboardSidebar(
+    textInput("company", 
+              "Enter Ticker Symbol:",
+              value = "AAPL"),
+    actionButton("scrape_news", "Get News Articles")
+  ),
+  dashboardBody(
+    fluidRow(
+      box(title = "News Articles", width = 12, 
+          DT::dataTableOutput("news_table"))
+    )
+  )
+)
+
+# Define server logic for the Shiny app
+server <- function(input, output, session) {
+
+  # Function to fetch news using NewsAPI
+  fetch_news <- function(company_ticker) {
+    # Construct the NewsAPI endpoint URL
+    url <- paste0("https://newsapi.org/v2/everything?q=", company_ticker, 
+                  "&from=", Sys.Date() - 30,  # Get news from the last month
+                  "&to=", Sys.Date(), 
+                  "&apiKey=", news_api_key)
+    
+    # Make a GET request to the NewsAPI
+    response <- GET(url)
+    
+    # Check if the request was successful
+    if (response$status_code != 200) {
+      stop("Error in fetching news data. Status code: ", response$status_code)
+    }
+    
+    # Parse the response
+    news_data <- fromJSON(content(response, "text", encoding = "UTF-8"))
+    
+    # Check if the response contains articles
+    if (length(news_data$articles) == 0) {
+      stop("No news articles found for this company.")
+    }
+    
+    # Prepare the data for display
+    news_articles <- data.frame(
+      Title = news_data$articles$title,
+      Description = news_data$articles$description,
+      Link = news_data$articles$url,
+      PublishedAt = news_data$articles$publishedAt,
+      stringsAsFactors = FALSE
+    )
+    
+    # Return the news data
+    return(news_articles)
+  }
+
+  # When the user clicks the button, fetch and display news
+  observeEvent(input$scrape_news, {
+    news_data <- fetch_news(input$company)
+    
+    if (!is.null(news_data)) {
+      # Display the news articles in a table
+      output$news_table <- DT::renderDataTable({
+        DT::datatable(news_data, escape = FALSE, selection = 'single',
+                      options = list(pageLength = 5, 
+                                     lengthMenu = c(5, 10, 25)))
+      })
+    }
+  })
+  
+  # When the user clicks on a news article, open the link in the browser
+  observeEvent(input$news_table_rows_selected, {
+    row <- input$news_table_rows_selected
+    if (length(row) > 0) {
+      selected_url <- output$news_table$data[row, "Link"]
+      browseURL(selected_url)
+    }
+  })
+}
+
+# Run the Shiny app with a fixed port
+shinyApp(ui, server, options = list(port = 5000))  # Fixed port 5000, change if needed
