@@ -1,5 +1,5 @@
 install.packages(c("quantmod", "fredr", "caret", "alphavantager"))
-packages <- c("quantmod", "fredr", "caret", "alphavantager", "httr", "jsonlite", "zoo", "dplyr", "rmarkdown", "officer")
+packages <- c("quantmod", "fredr", "caret", "alphavantager", "httr", "jsonlite", "zoo", "dplyr", "rmarkdown", "officer", "shiny", "shinythemes")
 lapply(packages, library, character.only = TRUE)
 sessionInfo()
 #Is X package loaded? 
@@ -74,3 +74,8 @@ combined_data <- combined_data %>%
     treasury_10yr = value.y,
     ue_rate = value
   )
+
+
+#Load the file in
+load("C:/Users/jakes/Downloads/Machine_learning_noob.RData")
+
