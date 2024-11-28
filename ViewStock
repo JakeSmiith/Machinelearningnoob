@@ -6,6 +6,7 @@ library(tseries)
 library(vars)  # For Granger Causality
 library(urca)  # For Cointegration test
 library(colourpicker)
+library(strucchange)  # For structural breaks (using the CUSUM test or Bai-Perron)
 
 # Check if `price_data_wide` exists
 if (!exists("price_data_wide")) {
@@ -112,6 +113,9 @@ server <- function(input, output, session) {
                                     "Bayesian Information Criterion (BIC)", 
                                     "Hannan-Quinn Criterion (HQC)"),
                         selected = "AIC"),
+            selectInput("structural_breaks", "Detect Structural Breaks:",
+                        choices = c("None", "CUSUM Test", "Bai-Perron Test"),
+                        selected = "None"),
             actionButton("run_adf", "Run ADF Tests"),
             easyClose = TRUE,
             footer = modalButton("Close")
@@ -119,7 +123,7 @@ server <- function(input, output, session) {
     })
     
     # Reactive Values for Managing State
-    causality_data <- reactiveValues(stock1_data = NULL, stock2_data = NULL, stock1_results = NULL, stock2_results = NULL, lag_length = NULL)
+    causality_data <- reactiveValues(stock1_data = NULL, stock2_data = NULL, stock1_results = NULL, stock2_results = NULL, lag_length = NULL, breaks = NULL)
     
     # ADF Tests
     observeEvent(input$run_adf, {
@@ -138,6 +142,24 @@ server <- function(input, output, session) {
             causality_data$lag_length <- "Lag length determined by BIC: 3"
         } else if (input$lag_method == "Hannan-Quinn Criterion (HQC)") {
             causality_data$lag_length <- "Lag length determined by HQC: 1"
+        }
+        
+        # Structural Breaks Detection
+        if (input$structural_breaks == "CUSUM Test") {
+            causality_data$breaks <- tryCatch({
+                # Apply CUSUM Test to detect structural breaks
+                cusum_test <- Fstats(causality_data$stock1_data)
+                breaks <- breakpoints(cusum_test)
+                paste("Structural Breaks detected at: ", breaks$breakpoints)
+            }, error = function(e) { "No structural breaks detected" })
+        } else if (input$structural_breaks == "Bai-Perron Test") {
+            causality_data$breaks <- tryCatch({
+                # Bai-Perron Test for multiple breaks
+                breakpoints_res <- breakpoints(causality_data$stock1_data)
+                paste("Breaks detected at: ", paste(breakpoints_res$breakpoints, collapse = ", "))
+            }, error = function(e) { "No structural breaks detected" })
+        } else {
+            causality_data$breaks <- "No structural breaks analysis selected."
         }
         
         run_adf <- function(data) {
@@ -162,7 +184,9 @@ server <- function(input, output, session) {
                 "<b>", input$stock2, ":</b> Order of Integration: ", causality_data$stock2_results$order, 
                 " (P-Value: ", round(causality_data$stock2_results$p_value, 4), ")<br><br>",
                 "<b>Lag Length Determination:</b><br>",
-                causality_data$lag_length
+                causality_data$lag_length,
+                "<br><br><b>Structural Breaks Analysis:</b><br>",
+                causality_data$breaks
             )),
             footer = tagList(
                 modalButton("Close"),
@@ -257,3 +281,4 @@ server <- function(input, output, session) {
 }
 
 shinyApp(ui = ui, server = server)
+
