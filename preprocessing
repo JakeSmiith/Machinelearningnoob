@@ -1,0 +1,4 @@
+load("C:/Users/jakes/Downloads/Machine_learning_noob.RData")
+install.packages("openxlsx")
+getwd()
+write.csv(price_data_log, "C:/Users/jakes/OneDrive - University of East Anglia/Documents/price_data_log.csv", row.names = FALSE)
