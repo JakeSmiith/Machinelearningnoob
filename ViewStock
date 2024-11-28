@@ -53,8 +53,8 @@ server <- function(input, output, session) {
     
     # Interactive Plot
     output$graph <- renderPlotly({
-        filtered_data <- price_data_wide %>%
-            filter(!is.na(.data[[input$selected_column]])) %>%
+        filtered_data <- price_data_wide %>% 
+            filter(!is.na(.data[[input$selected_column]])) %>% 
             {
                 if (input$selected_year != "Max") {
                     filter(., format(Date, "%Y") == input$selected_year)
@@ -62,7 +62,7 @@ server <- function(input, output, session) {
                     .
                 }
             }
-        plot <- plot_ly(data = filtered_data) %>%
+        plot <- plot_ly(data = filtered_data) %>% 
             add_lines(
                 x = ~Date,
                 y = ~.data[[input$selected_column]],
@@ -70,12 +70,12 @@ server <- function(input, output, session) {
                 line = list(color = input$primary_color),
                 hoverinfo = "text",
                 text = ~paste(
-                    "Date: ", format(Date, "%b %Y"), "<br>",
+                    "Date: ", format(Date, "%d/%m/%Y"), "<br>",  # Change the date format here
                     "Value: £", sprintf("%.2f", .data[[input$selected_column]])
                 )
             )
         if (input$comparison_column != "None") {
-            plot <- plot %>%
+            plot <- plot %>% 
                 add_lines(
                     x = ~Date,
                     y = ~.data[[input$comparison_column]],
@@ -83,15 +83,16 @@ server <- function(input, output, session) {
                     line = list(color = input$comparison_color),
                     hoverinfo = "text",
                     text = ~paste(
-                        "Date: ", format(Date, "%b %Y"), "<br>",
+                        "Date: ", format(Date, "%d/%m/%Y"), "<br>",  # Change the date format here as well
                         "Value: £", sprintf("%.2f", .data[[input$comparison_column]])
                     )
                 )
         }
-        plot %>%
+        plot %>% 
             layout(
                 title = paste("Plot of", input$selected_column),
-                hoverlabel = list(bgcolor = "white", font = list(color = "black"))
+                hoverlabel = list(bgcolor = "white", font = list(color = "black")),
+                yaxis = list(title = "Price")  # Set the y-axis label here
             )
     })
     
@@ -184,7 +185,7 @@ server <- function(input, output, session) {
                     "Critical Value: ", round(summary(coint_test)@cval[1, 1], 4), "<br>",
                     ifelse(summary(coint_test)@teststat[1] > summary(coint_test)@cval[1, 1], 
                            "Cointegrated", "Not Cointegrated")
-                )),
+                )) ,
                 footer = modalButton("Close")
             ))
         }, error = function(e) {
@@ -224,7 +225,7 @@ server <- function(input, output, session) {
                     "<b>Stock 1 -> Stock 2:</b> P-Value = ", round(p_value_y1_cause_y2, 4), "<br>",
                     "<b>Stock 2 -> Stock 1:</b> P-Value = ", round(p_value_y2_cause_y1, 4), "<br><br>",
                     "<b>Conclusion:</b> ", relationship
-                )),
+                )) ,
                 footer = modalButton("Close")
             ))
         }, error = function(e) {
@@ -239,3 +240,4 @@ server <- function(input, output, session) {
 }
 
 shinyApp(ui = ui, server = server)
+
