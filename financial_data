@@ -1,0 +1,48 @@
+# Install and load required packages
+if (!require("httr")) install.packages("httr")
+if (!require("jsonlite")) install.packages("jsonlite")
+if (!require("openxlsx")) install.packages("openxlsx")
+
+library(httr)
+library(jsonlite)
+library(openxlsx)
+
+# Set your Alpha Vantage API key
+api_key <- "8NIAD65MWQFINSTH"
+symbol <- "AAPL"
+
+# Define API URLs
+url_income <- paste0("https://www.alphavantage.co/query?function=INCOME_STATEMENT&symbol=", symbol, "&apikey=", api_key)
+url_balance <- paste0("https://www.alphavantage.co/query?function=BALANCE_SHEET&symbol=", symbol, "&apikey=", api_key)
+url_cash_flow <- paste0("https://www.alphavantage.co/query?function=CASH_FLOW&symbol=", symbol, "&apikey=", api_key)
+
+# Fetch data
+income_statement <- fromJSON(content(GET(url_income), as = "text"))
+balance_sheet <- fromJSON(content(GET(url_balance), as = "text"))
+cash_flow <- fromJSON(content(GET(url_cash_flow), as = "text"))
+
+# Extract relevant data from API responses
+income_statement_data <- as.data.frame(income_statement$annualReports)
+balance_sheet_data <- as.data.frame(balance_sheet$annualReports)
+cash_flow_data <- as.data.frame(cash_flow$annualReports)
+
+# Create Excel workbook
+wb <- createWorkbook()
+
+# Add sheets and write data
+addWorksheet(wb, "Income Statement")
+writeData(wb, "Income Statement", income_statement_data)
+
+addWorksheet(wb, "Balance Sheet")
+writeData(wb, "Balance Sheet", balance_sheet_data)
+
+addWorksheet(wb, "Cash Flow Statement")
+writeData(wb, "Cash Flow Statement", cash_flow_data)
+
+# Define the file path for Downloads folder
+downloads_path <- file.path(Sys.getenv("USERPROFILE"), "Downloads", "financial_statements.xlsx")
+
+# Save the Excel file in the Downloads folder
+saveWorkbook(wb, file = downloads_path, overwrite = TRUE)
+
+cat("Financial statements saved to your Downloads folder as 'financial_statements.xlsx'.\n")
