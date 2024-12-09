@@ -46,3 +46,51 @@ downloads_path <- file.path(Sys.getenv("USERPROFILE"), "Downloads", "financial_s
 saveWorkbook(wb, file = downloads_path, overwrite = TRUE)
 
 cat("Financial statements saved to your Downloads folder as 'financial_statements.xlsx'.\n")
+
+# Install and load required packages
+if (!require("readxl")) install.packages("readxl")
+if (!require("dplyr")) install.packages("dplyr")
+
+library(readxl)
+library(dplyr)
+
+# Define the file path
+file_path <- "financial_statements.xlsx"
+
+# Sheet names that correspond to the statements
+sheet_income <- "Income Statement"
+sheet_balance <- "Balance Sheet"
+sheet_cashflow <- "Cash Flow Statement"
+
+# Function to clean and extract the last 3 years
+clean_statement <- function(sheet_name, file_path) {
+  # Read the sheet
+  data <- read_excel(file_path, sheet = sheet_name)
+  
+  # Check if the fiscalDateEnding column exists and clean the data
+  if ("fiscalDateEnding" %in% colnames(data)) {
+    cleaned_data <- data %>%
+      mutate(fiscalDateEnding = as.Date(fiscalDateEnding)) %>%  # Convert to Date
+      arrange(desc(fiscalDateEnding)) %>%  # Sort by date
+      slice(1:3)  # Select the last 3 years
+    return(cleaned_data)
+  } else {
+    stop(paste("fiscalDateEnding column not found in", sheet_name))
+  }
+}
+
+# Clean each statement
+income_statement_cleaned <- clean_statement(sheet_income, file_path)
+balance_sheet_cleaned <- clean_statement(sheet_balance, file_path)
+cash_flow_cleaned <- clean_statement(sheet_cashflow, file_path)
+
+# Display the cleaned tables
+print("Income Statement (Last 3 Years):")
+print(income_statement_cleaned)
+
+print("Balance Sheet (Last 3 Years):")
+print(balance_sheet_cleaned)
+
+print("Cash Flow Statement (Last 3 Years):")
+print(cash_flow_cleaned)
+
