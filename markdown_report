@@ -1,0 +1,159 @@
+install.packages("tinytex")
+tinytex::install_tinytex()
+# Install and load required packages
+if (!require("shiny")) install.packages("shiny")
+if (!require("shinyWidgets")) install.packages("shinyWidgets")
+if (!require("rmarkdown")) install.packages("rmarkdown")
+if (!require("sendmailR")) install.packages("sendmailR")
+if (!require("ggplot2")) install.packages("ggplot2")
+if (!require("kableExtra")) install.packages("kableExtra")
+if (!require("readxl")) install.packages("readxl")
+if (!require("dplyr")) install.packages("dplyr")
+
+library(shiny)
+library(shinyWidgets)
+library(rmarkdown)
+library(sendmailR)
+library(ggplot2)
+library(kableExtra)
+library(readxl)
+library(dplyr)
+
+# File paths
+file_sp500 <- "C:/Users/jakes/Downloads/SP500_Data.xlsx"
+file_financials <- "C:/Users/jakes/Downloads/financial_statements.xlsx"
+
+# Shiny UI
+ui <- fluidPage(
+    titlePanel("Financial Data Fetch and Email Service"),
+    
+    sidebarLayout(
+        sidebarPanel(
+            textInput("email", "Enter your email address:", placeholder = "example@example.com"),
+            actionButton("generate", "Generate Report and Send Email")
+        ),
+        
+        mainPanel(
+            h3("Report Generation Status"),
+            verbatimTextOutput("status")
+        )
+    )
+)
+
+# Shiny Server
+server <- function(input, output, session) {
+    observeEvent(input$generate, {
+        # Validate email input
+        req(input$email)
+        if (!grepl(".+@.+\\..+", input$email)) {
+            output$status <- renderText("Invalid email address. Please try again.")
+            return(NULL)
+        }
+        
+        output$status <- renderText("Generating report...")
+        
+        # Load and process data
+        # Function to clean and extract the last 3 years of data
+        clean_statement <- function(sheet_name, file_path) {
+            data <- read_excel(file_path, sheet = sheet_name)
+            if ("fiscalDateEnding" %in% colnames(data)) {
+                cleaned_data <- data %>%
+                    mutate(fiscalDateEnding = as.Date(fiscalDateEnding)) %>%
+                    arrange(desc(fiscalDateEnding)) %>%
+                    slice(1:3)
+                return(cleaned_data)
+            } else {
+                stop(paste("fiscalDateEnding column not found in", sheet_name))
+            }
+        }
+        
+        # Load and clean financial data for AAPL
+        sheet_income <- "Income Statement"
+        sheet_balance <- "Balance Sheet"
+        sheet_cashflow <- "Cash Flow Statement"
+        
+        income_statement_cleaned <- clean_statement(sheet_income, file_financials)
+        balance_sheet_cleaned <- clean_statement(sheet_balance, file_financials)
+        cash_flow_cleaned <- clean_statement(sheet_cashflow, file_financials)
+        
+        # Load adjusted closing prices for AAPL
+        sp500_data <- read_excel(file_sp500)
+        
+        # Extract the "AAPL US Equity" column
+        adjusted_prices <- sp500_data %>%
+            select(Date, `AAPL US Equity`) %>%
+            rename(Adjusted_Close = `AAPL US Equity`) %>%
+            filter(!is.na(Adjusted_Close))
+        
+        # Create the RMarkdown report
+        temp_report <- tempfile(fileext = ".Rmd")
+        writeLines(c(
+            "---",
+            "title: 'Financial Summary Report for AAPL'",
+            "author: 'Shiny App'",
+            "date: '`r Sys.Date()`'",
+            "output: pdf_document",
+            "---",
+            "",
+            "```{r setup, include=FALSE}",
+            "library(ggplot2)",
+            "library(kableExtra)",
+            "```",
+            "",
+            "### Income Statement (Last 3 Years)",
+            "```{r}",
+            "kable(head(income_statement_cleaned), caption = 'Income Statement') %>%",
+            "  kable_styling(bootstrap_options = c('striped', 'hover', 'condensed'))",
+            "```",
+            "",
+            "### Balance Sheet (Last 3 Years)",
+            "```{r}",
+            "kable(head(balance_sheet_cleaned), caption = 'Balance Sheet') %>%",
+            "  kable_styling(bootstrap_options = c('striped', 'hover', 'condensed'))",
+            "```",
+            "",
+            "### Cash Flow Statement (Last 3 Years)",
+            "```{r}",
+            "kable(head(cash_flow_cleaned), caption = 'Cash Flow Statement') %>%",
+            "  kable_styling(bootstrap_options = c('striped', 'hover', 'condensed'))",
+            "```",
+            "",
+            "### Adjusted Closing Prices",
+            "```{r}",
+            "ggplot(adjusted_prices, aes(x = Date, y = Adjusted_Close)) +",
+            "  geom_line(color = 'blue') +",
+            "  labs(title = 'Adjusted Closing Prices for AAPL', x = 'Date', y = 'Adjusted Close Price') +",
+            "  theme_minimal()",
+            "```"
+        ), temp_report)
+        
+        # Render the report as a PDF
+        pdf_file <- tempfile(fileext = ".pdf")
+        render(input = temp_report, output_file = pdf_file, params = list(
+            income_statement_cleaned = income_statement_cleaned,
+            balance_sheet_cleaned = balance_sheet_cleaned,
+            cash_flow_cleaned = cash_flow_cleaned,
+            adjusted_prices = adjusted_prices
+        ))
+        
+        # Send email with the PDF report
+        from <- "<your_email@example.com>"  # Replace with your email
+        to <- input$email
+        subject <- "AAPL Financial Summary Report"
+        body <- "Attached is the AAPL Financial Summary Report you requested."
+        attachment <- mime_part(pdf_file)
+        attachment[["headers"]][["Content-Disposition"]] <- "attachment; filename=report.pdf"
+        email <- list(
+            mime_part(body),
+            attachment
+        )
+        sendmail(from = from, to = to, subject = subject, msg = email, 
+                 control = list(smtpServer = "smtp.your-email-provider.com"))  # Replace with your SMTP server
+        
+        # Update status
+        output$status <- renderText("Report generated and sent to your email.")
+    })
+}
+
+# Run the Shiny app
+shinyApp(ui = ui, server = server)
