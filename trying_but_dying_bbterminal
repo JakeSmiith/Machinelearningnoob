@@ -116,30 +116,29 @@ save.image(file = "Machine_learning_noob.RData")
 summary(price_data_wide)
 dim(price_data_wide)
 
+# Load required library
+library(openxlsx)
 
-To do (@ bb terminal)
-- Remove 'US Equity' from constituent list
-- Link up the constituent list into a loop when fetching data from alphavantage
-- Or I could just do this all in BB terminal? 
-- Why don't I grab all stock-related data from bb terminal?
-- Still need to loop and perform action for all S&P500 constituents.
+# Load the data from your specified file path
+load("C:/Users/jakes/Downloads/Machine_learning_noob.RData")
 
+# Check if 'price_data_wide' is loaded successfully
+if (exists("price_data_wide")) {
+  # Create a new workbook
+  wb <- createWorkbook()
+  
+  # Add a worksheet named "S&P500 Data"
+  addWorksheet(wb, "S&P500 Data")
+  
+  # Write the entire dataframe to the Excel worksheet
+  writeData(wb, "S&P500 Data", price_data_wide, startCol = 1, startRow = 1)
+  
+  # Save the workbook as an Excel file
+  saveWorkbook(wb, "C:/Users/jakes/Downloads/SP500_Data.xlsx", overwrite = TRUE)
+  
+  # Confirm output
+  cat("Excel file saved as 'C:/Users/jakes/Downloads/SP500_Data.xlsx'")
+} else {
+  cat("Error: 'price_data_wide' not found in the loaded RData file.")
+}
 
-
-- Later considerations (once we have the data) - How do we split up into training and testing data? 
-
-# What's the end goal - RMSE model
-# Idea - Create interface which allows dropdown menu - macro outlook with infl
-Dashboard whgich shows historical growth on website
-
-
-
-# Historical EPS, revenue projections, dividend yield for 1 stock
-bb_data <- bdh(securities = "AAPL US Equity", 
-               fields = c("SALES_REV_TURN", "IS_EPS", "TOT_DEBT_TO_TOT_EQY"), 
-               start.date = as.Date("2010-01-01"), 
-               end.date = Sys.Date())
-
-this but for the 
-
-Connect R to the internet? 
