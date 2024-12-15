@@ -1,4 +1,4 @@
-load("~/Machine_learning_noob.RData")
+load("C:/Users/jakes/Downloads/Machine_learning_noob.RData")
 library(shiny)
 library(shinythemes)
 library(plotly)
