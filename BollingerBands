@@ -1,214 +1,123 @@
-library(tidyverse)
-library(TTR)  # For Bollinger Bands
-library(zoo)  # For rolling window operations and NA handling
-
-# Example: Load price data
-price_data <- price_data_wide  # Replace with your actual variable name
-price_data <- price_data %>%
-    mutate(Date = as.Date(Date)) %>%
-    column_to_rownames("Date")
-
-# Remove columns with entirely NA values
-price_data <- price_data %>% select(where(~ any(!is.na(.))))
-
-# Impute missing values using Last Observation Carried Forward (LOCF)
-price_data <- price_data %>%
-    mutate_all(~ na.locf(., na.rm = FALSE)) %>%  # Fill non-leading NAs
-    mutate_all(~ na.locf(., fromLast = TRUE, na.rm = FALSE))  # Backfill leading NAs
-
-# Function to calculate Bollinger Bands and Z-Score
-calculate_mean_reversion <- function(price_series, n = 20) {
-    # Skip if the series is all NA
-    if (all(is.na(price_series))) return(NULL)
-    
-    # Calculate Bollinger Bands (returns matrix)
-    bbands <- BBands(price_series, n = n, sd = 2)
-    
-    # Extract values using matrix indexing
-    bb_upper <- bbands[, "up"]
-    bb_lower <- bbands[, "dn"]
-    bb_mean  <- bbands[, "mavg"]
-    
-    # Calculate Z-Score: (Price - Rolling Mean) / Rolling SD
-    rolling_sd <- rollapply(price_series, n, sd, na.rm = TRUE, fill = NA, align = "right")
-    z_score <- (price_series - bb_mean) / rolling_sd
-    
-    # Return as a data frame
-    return(data.frame(
-        Price = price_series,
-        BB_Upper = bb_upper,
-        BB_Lower = bb_lower,
-        BB_Mean  = bb_mean,
-        Z_Score = z_score
-    ))
-}
-
-# STEP 1: Calculate Bollinger Bands and Z-Score for all stocks
-mean_reversion_data <- lapply(price_data, calculate_mean_reversion)
-
-# Assign column names (tickers) to the list
-names(mean_reversion_data) <- colnames(price_data)
-
-# Verify that the function works correctly for one stock
-print(head(mean_reversion_data[["AAPL US Equity"]]))
-# STEP 3: Identify Trading Signals
-generate_signals <- function(data) {
-    data <- data %>%
-        mutate(
-            Signal = case_when(
-                Price < BB_Lower & Z_Score < -2 ~ "BUY",   # Buy signal
-                Price > BB_Upper & Z_Score > 2 ~ "SELL",  # Sell signal
-                TRUE ~ "HOLD"                            # Hold
-            )
-        )
-    return(data)
-}
-
-# Apply signal generation to all stocks
-signals <- lapply(mean_reversion_data, generate_signals)
-
-# STEP 4: Combine Results into a Single DataFrame
-signals_combined <- bind_rows(lapply(names(signals), function(stock) {
-    cbind(Stock = stock, Date = rownames(signals[[stock]]), signals[[stock]])
-}), .id = "ID")
-
-# Filter for BUY and SELL signals
-trading_signals <- signals_combined %>%
-    filter(Signal %in% c("BUY", "SELL"))
-
-# Print top signals
-print(head(trading_signals))
-
-# STEP 5: Backtest the Strategy
-backtest_mean_reversion <- function(signals) {
-    pnl <- signals %>%
-        arrange(Date) %>%
-        mutate(
-            Return = case_when(
-                Signal == "BUY" ~ lead(Price) / Price - 1,
-                Signal == "SELL" ~ Price / lead(Price) - 1,
-                TRUE ~ 0
-            )
-        ) %>%
-        filter(!is.na(Return))  # Remove rows without returns
-    
-    total_pnl <- sum(pnl$Return, na.rm = TRUE)  # Calculate total PnL
-    return(total_pnl)
-}
-
-# Apply backtest to all stocks
-pnl_results <- signals_combined %>%
-    group_by(Stock) %>%
-    summarise(Total_PnL = backtest_mean_reversion(.))
-
-# Print backtest results
-print(pnl_results)
-
-# STEP 6: Evaluate and Visualize the Results
-
-# Metrics
-print("Backtesting Results:")
-print(pnl_results)
-
-# Visualisation for One Stock
-stock <- "AAPL US Equity"  # Replace with the stock you want to visualize
-ggplot(signals[[stock]], aes(x = as.Date(Date))) +
-    geom_line(aes(y = Price), colour = "blue") +
-    geom_line(aes(y = BB_Upper), colour = "red", linetype = "dashed") +
-    geom_line(aes(y = BB_Lower), colour = "green", linetype = "dashed") +
-    geom_point(aes(y = Price, color = Signal), size = 2) +
-    scale_color_manual(values = c("BUY" = "green", "SELL" = "red", "HOLD" = "gray")) +
-    labs(
-        title = paste("Mean Reversion Signals for", stock),
-        y = "Price", x = "Date"
-    ) +
-    theme_minimal()
-
-# Summary
-print("Visualization complete. Analyze the BUY/SELL signals for your selected stock.")
-
-# Load Libraries
+# Load Required Libraries
 library(shiny)
 library(shinythemes)
 library(plotly)
-library(dplyr)
-library(TTR)
+library(quantmod)   # Bollinger Bands
+library(tidyverse)
 library(zoo)
 
-# Assume 'sp500_constituents' already exists in your R environment
-# It must be a character vector of stock names (e.g., c("AAPL US Equity", "MSFT US Equity", ...))
+# Step 1: Load and Clean Price Data
+price_data <- price_data_wide  # Replace with your actual dataset
 
-# Placeholder: Generate mock signals for each stock dynamically
-generate_mock_signals <- function(stock) {
-    dates <- seq(as.Date("2024-01-01"), by = "days", length.out = 100)
-    price <- cumsum(runif(100, -1, 1)) + 150
-    BB_Upper <- price + 5
-    BB_Lower <- price - 5
-    signal <- sample(c("BUY", "SELL", "HOLD"), 100, replace = TRUE)
-    data.frame(Date = dates, Price = price, BB_Upper = BB_Upper, BB_Lower = BB_Lower, Signal = signal)
+price_data <- price_data %>%
+    mutate(Date = as.Date(Date)) %>%
+    column_to_rownames("Date") %>%
+    select(where(~ any(!is.na(.)))) %>% 
+    mutate_all(~ as.numeric(.)) %>%               # Ensure numeric
+    mutate_all(~ na.locf(., na.rm = FALSE)) %>%   # Forward fill missing values
+    mutate_all(~ na.locf(., fromLast = TRUE, na.rm = FALSE))  # Backward fill
+
+# Step 2: Function to Calculate Bollinger Bands and Generate Signals
+calculate_signals <- function(price_series, n = 20, k = 2) {
+    price_series <- as.numeric(na.omit(price_series))  # Ensure numeric and remove NAs
+    
+    if (length(price_series) < n) return(NULL)  # Skip if not enough data points
+    
+    # Calculate Bollinger Bands
+    bb <- BBands(price_series, n = n, sd = k)
+    
+    # Generate BUY/SELL signals
+    signal <- rep("HOLD", length(price_series))  # Default to HOLD
+    signal[price_series < bb[, "dn"]] <- "BUY"   # Price below lower band
+    signal[price_series > bb[, "up"]] <- "SELL"  # Price above upper band
+    
+    # Create result data frame
+    return(data.frame(
+        Price = price_series,
+        BB_Upper = bb[, "up"],
+        BB_Lower = bb[, "dn"],
+        BB_Mean  = bb[, "mavg"],
+        Signal = signal
+    ))
 }
 
-# Generate signals for each S&P500 constituent dynamically
-signals <- lapply(sp500_constituents, generate_mock_signals)
-names(signals) <- sp500_constituents  # Use the actual names in sp500_constituents
+# Step 3: Apply Bollinger Bands Function to All Stocks
+signals_list <- lapply(price_data, calculate_signals)
+names(signals_list) <- colnames(price_data)
 
-# Shiny UI
+# Combine All Results into a Single DataFrame
+signals_combined <- bind_rows(lapply(names(signals_list), function(stock) {
+    cbind(Stock = stock, Date = rownames(signals_list[[stock]]), signals_list[[stock]])
+}), .id = "ID")
+
+# Step 4: Backtest Strategy for Each Stock
+backtest_strategy <- function(data) {
+    data <- data %>%
+        arrange(Date) %>%
+        mutate(
+            Return = case_when(
+                Signal == "BUY"  ~ (lead(Price) - Price) / Price,  # Buy → Sell Next Day
+                Signal == "SELL" ~ (Price - lead(Price)) / Price,  # Sell → Buy Back Next Day
+                TRUE ~ NA_real_                                     # Ignore HOLD
+            )
+        ) %>%
+        filter(!is.na(Return))  # Remove invalid returns
+    
+    return(sum(data$Return, na.rm = TRUE))  # Total PnL
+}
+
+# Apply Backtesting to Each Stock
+pnl_results <- signals_combined %>%
+    group_by(Stock) %>%
+    summarise(Total_PnL = backtest_strategy(.))
+
+# Print PnL Results
+print("Backtesting Results:")
+print(pnl_results)
+
+# Step 5: Build Shiny App for Visualization
 ui <- fluidPage(
-    theme = shinytheme("journal"),  # Optional: Clean theme
-    titlePanel("Bollinger Bands and Mean Reversion Signals for S&P 500 Constituents"),
+    theme = shinytheme("journal"),
+    titlePanel("Bollinger Bands Backtest and Visualization"),
     
     sidebarLayout(
         sidebarPanel(
-            selectInput("selected_stock", "Choose a stock to plot:",
-                        choices = sp500_constituents,  # Pull dropdown options dynamically
-                        selected = sp500_constituents[1]),  # Default: First stock
-            selectInput("selected_year", "Choose a year to display:",
-                        choices = c("Max", unique(format(seq(as.Date("2024-01-01"), length.out = 100, by = "days"), "%Y"))),
-                        selected = "Max")
+            selectInput("selected_stock", "Choose a Stock:",
+                        choices = unique(signals_combined$Stock),
+                        selected = unique(signals_combined$Stock)[1])
         ),
-        
         mainPanel(
-            plotlyOutput("graph"),
-            h4("Instructions:"),
-            p("Use the dropdown menu to choose a stock from the full S&P 500 list and visualize the Bollinger Bands, Price, and BUY/SELL signals.")
+            plotlyOutput("plot_bollinger"),
+            h4("Interactive Plot"),
+            p("View Bollinger Bands, Price, and Signals for the selected stock.")
         )
     )
 )
 
-# Shiny Server
 server <- function(input, output, session) {
-    
-    # Reactive data based on selected stock and year
+    # Filter data based on selected stock
     selected_data <- reactive({
-        stock_data <- signals[[input$selected_stock]]  # Access data dynamically
-        
-        # Filter for the selected year if applicable
-        if (input$selected_year != "Max") {
-            stock_data <- stock_data %>%
-                filter(format(Date, "%Y") == input$selected_year)
-        }
-        stock_data
+        signals_combined %>% filter(Stock == input$selected_stock)
     })
     
-    # Render the interactive plot
-    output$graph <- renderPlotly({
+    # Render Plot
+    output$plot_bollinger <- renderPlotly({
         stock_data <- selected_data()
         
-        plot_ly(stock_data, x = ~Date) %>%
+        plot_ly(stock_data, x = ~as.Date(Date)) %>%
             add_lines(y = ~Price, name = "Price", line = list(color = "blue")) %>%
             add_lines(y = ~BB_Upper, name = "BB Upper", line = list(color = "red", dash = "dash")) %>%
             add_lines(y = ~BB_Lower, name = "BB Lower", line = list(color = "green", dash = "dash")) %>%
-            add_markers(y = ~Price, color = ~Signal, colors = c("BUY" = "green", "SELL" = "red", "HOLD" = "gray"),
-                        name = "Signal", size = 10) %>%
+            add_markers(y = ~Price, color = ~Signal, 
+                        colors = c("BUY" = "green", "SELL" = "red", "HOLD" = "gray"),
+                        name = "Signals", size = 10) %>%
             layout(
-                title = paste("Bollinger Bands & Signals for", input$selected_stock),
+                title = paste("Bollinger Bands for", input$selected_stock),
                 xaxis = list(title = "Date"),
-                yaxis = list(title = "Price"),
-                legend = list(orientation = "h", x = 0.3, y = -0.2)
+                yaxis = list(title = "Price")
             )
     })
 }
 
 # Run the Shiny App
 shinyApp(ui = ui, server = server)
-
