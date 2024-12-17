@@ -17,7 +17,7 @@ price_data <- price_data %>%
     mutate_all(~ na.locf(., na.rm = FALSE)) %>%   # Forward fill missing values
     mutate_all(~ na.locf(., fromLast = TRUE, na.rm = FALSE))  # Backward fill
 
-# Step 2: Function to Calculate Bollinger Bands and Generate Signals
+# Step 2: Function to Calculate Bollinger Bands and Z-Statistic
 calculate_signals <- function(price_series, n = 20, k = 2) {
     price_series <- as.numeric(na.omit(price_series))  # Ensure numeric and remove NAs
     
@@ -25,18 +25,24 @@ calculate_signals <- function(price_series, n = 20, k = 2) {
     
     # Calculate Bollinger Bands
     bb <- BBands(price_series, n = n, sd = k)
+    BB_Mean <- bb[, "mavg"]  # Center line
+    rolling_sd <- rollapply(price_series, n, sd, fill = NA, align = "right")
     
-    # Generate BUY/SELL signals
+    # Calculate Z-Statistic
+    Z <- (price_series - BB_Mean) / rolling_sd
+    
+    # Generate BUY/SELL signals with Z-stat filter
     signal <- rep("HOLD", length(price_series))  # Default to HOLD
-    signal[price_series < bb[, "dn"]] <- "BUY"   # Price below lower band
-    signal[price_series > bb[, "up"]] <- "SELL"  # Price above upper band
+    signal[price_series < bb[, "dn"] & Z < -2] <- "BUY"   # Strong BUY signal
+    signal[price_series > bb[, "up"] & Z > 2] <- "SELL"   # Strong SELL signal
     
     # Create result data frame
     return(data.frame(
         Price = price_series,
         BB_Upper = bb[, "up"],
         BB_Lower = bb[, "dn"],
-        BB_Mean  = bb[, "mavg"],
+        BB_Mean  = BB_Mean,
+        Z_Statistic = Z,
         Signal = signal
     ))
 }
@@ -49,6 +55,10 @@ names(signals_list) <- colnames(price_data)
 signals_combined <- bind_rows(lapply(names(signals_list), function(stock) {
     cbind(Stock = stock, Date = rownames(signals_list[[stock]]), signals_list[[stock]])
 }), .id = "ID")
+
+# Clean stock names to avoid issues in Shiny input
+signals_combined$Stock <- gsub(" ", "_", signals_combined$Stock)  # Replace spaces with underscores
+unique_stocks <- unique(signals_combined$Stock)
 
 # Step 4: Backtest Strategy for Each Stock
 backtest_strategy <- function(data) {
@@ -78,18 +88,18 @@ print(pnl_results)
 # Step 5: Build Shiny App for Visualization
 ui <- fluidPage(
     theme = shinytheme("journal"),
-    titlePanel("Bollinger Bands Backtest and Visualization"),
+    titlePanel("Bollinger Bands with Z-Statistic Backtest and Visualization"),
     
     sidebarLayout(
         sidebarPanel(
             selectInput("selected_stock", "Choose a Stock:",
-                        choices = unique(signals_combined$Stock),
-                        selected = unique(signals_combined$Stock)[1])
+                        choices = unique_stocks,   # Use cleaned stock names
+                        selected = unique_stocks[1])  # Default to the first stock
         ),
         mainPanel(
             plotlyOutput("plot_bollinger"),
             h4("Interactive Plot"),
-            p("View Bollinger Bands, Price, and Signals for the selected stock.")
+            p("View Bollinger Bands, Price, and Signals for the selected stock with Z-stat filtering.")
         )
     )
 )
@@ -112,7 +122,7 @@ server <- function(input, output, session) {
                         colors = c("BUY" = "green", "SELL" = "red", "HOLD" = "gray"),
                         name = "Signals", size = 10) %>%
             layout(
-                title = paste("Bollinger Bands for", input$selected_stock),
+                title = paste("Bollinger Bands with Z-Statistic for", input$selected_stock),
                 xaxis = list(title = "Date"),
                 yaxis = list(title = "Price")
             )
