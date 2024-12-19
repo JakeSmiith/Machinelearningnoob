@@ -1,0 +1,74 @@
+# Install required libraries if not already installed
+if (!require("openxlsx")) install.packages("openxlsx")
+if (!require("quantmod")) install.packages("quantmod")
+if (!require("tidyverse")) install.packages("tidyverse")
+if (!require("zoo")) install.packages("zoo")
+
+# Load libraries
+library(openxlsx)
+library(quantmod)
+library(tidyverse)
+library(zoo)
+
+# Step 1: Load and Clean Price Data
+price_data <- price_data_wide  # Replace with your actual dataset
+
+price_data <- price_data %>%
+    mutate(Date = as.Date(Date)) %>%
+    column_to_rownames("Date") %>%
+    select(where(~ any(!is.na(.)))) %>% 
+    mutate(across(everything(), as.numeric))  # Ensure all values are numeric
+
+# Step 2: Function to Calculate Bollinger Bands and Z-Statistic
+calculate_signals <- function(price_series, n = 20, k = 2) {
+    if (all(is.na(price_series))) return(NULL)
+    
+    BB_Upper <- BB_Lower <- BB_Mean <- Z <- rep(NA, length(price_series))
+    signal <- rep("HOLD", length(price_series))  # Default signal
+    
+    valid_indices <- which(!is.na(price_series))
+    if (length(valid_indices) >= n) {
+        bb <- BBands(price_series[valid_indices], n = n, sd = k)
+        rolling_sd <- rollapply(price_series[valid_indices], n, sd, fill = NA, align = "right")
+        
+        BB_Mean[valid_indices] <- bb[, "mavg"]
+        BB_Upper[valid_indices] <- bb[, "up"]
+        BB_Lower[valid_indices] <- bb[, "dn"]
+        Z[valid_indices] <- (price_series[valid_indices] - BB_Mean[valid_indices]) / rolling_sd
+        
+        signal[valid_indices][price_series[valid_indices] < BB_Lower[valid_indices] & Z[valid_indices] < -2] <- "BUY"
+        signal[valid_indices][price_series[valid_indices] > BB_Upper[valid_indices] & Z[valid_indices] > 2] <- "SELL"
+    }
+    
+    return(data.frame(
+        Date = rownames(price_data),
+        Price = price_series,
+        BB_Upper = BB_Upper,
+        BB_Lower = BB_Lower,
+        BB_Mean = BB_Mean,
+        Z_Statistic = Z,
+        Signal = signal
+    ))
+}
+
+# Step 3: Apply Function and Save to Excel
+signals_list <- lapply(price_data, calculate_signals)
+names(signals_list) <- colnames(price_data)
+
+save_to_excel <- function(signals_list, file_name = "bollinger_signals.xlsx") {
+    workbook <- createWorkbook()
+    
+    for (stock in names(signals_list)) {
+        if (!is.null(signals_list[[stock]])) {
+            sheet_data <- signals_list[[stock]]
+            sheet_name <- str_replace_all(stock, "[^A-Za-z0-9_]", "_")
+            addWorksheet(workbook, sheetName = sheet_name)
+            writeData(workbook, sheet = sheet_name, sheet_data)
+        }
+    }
+    
+    saveWorkbook(workbook, file_name, overwrite = TRUE)
+}
+
+save_to_excel(signals_list, "bollinger_signals.xlsx")
+print("Excel file saved successfully.")
