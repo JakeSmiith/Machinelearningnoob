@@ -292,4 +292,134 @@ server <- function(input, output, session) {
 # Run the application
 shinyApp(ui = ui, server = server)
 
+# Install required libraries if not already installed
+if (!require("openxlsx")) install.packages("openxlsx")
+if (!require("quantmod")) install.packages("quantmod")
+if (!require("tidyverse")) install.packages("tidyverse")
+if (!require("zoo")) install.packages("zoo")
+if (!require("shiny")) install.packages("shiny")
+if (!require("DT")) install.packages("DT")
+
+# Load libraries
+library(openxlsx)
+library(quantmod)
+library(tidyverse)
+library(zoo)
+library(shiny)
+library(DT)
+
+# Step 1: Load and Clean Price Data
+price_data <- price_data_wide  # Replace with your actual dataset
+
+price_data <- price_data %>%
+    mutate(Date = as.Date(Date)) %>%
+    column_to_rownames("Date") %>%
+    select(where(~ any(!is.na(.)))) %>% 
+    mutate(across(everything(), as.numeric))  # Ensure all values are numeric
+
+# Step 2: Function to Calculate Bollinger Bands and Z-Statistic
+calculate_signals <- function(price_series, n = 20, k = 2) {
+    if (all(is.na(price_series))) return(NULL)
+    
+    BB_Upper <- BB_Lower <- BB_Mean <- Z <- rep(NA, length(price_series))
+    signal <- rep("HOLD", length(price_series))  # Default signal
+    
+    valid_indices <- which(!is.na(price_series))
+    if (length(valid_indices) >= n) {
+        bb <- BBands(price_series[valid_indices], n = n, sd = k)
+        rolling_sd <- rollapply(price_series[valid_indices], n, sd, fill = NA, align = "right")
+        
+        BB_Mean[valid_indices] <- bb[, "mavg"]
+        BB_Upper[valid_indices] <- bb[, "up"]
+        BB_Lower[valid_indices] <- bb[, "dn"]
+        Z[valid_indices] <- (price_series[valid_indices] - BB_Mean[valid_indices]) / rolling_sd
+        
+        signal[valid_indices][price_series[valid_indices] < BB_Lower[valid_indices] & Z[valid_indices] < -2] <- "BUY"
+        signal[valid_indices][price_series[valid_indices] > BB_Upper[valid_indices] & Z[valid_indices] > 2] <- "SELL"
+    }
+    
+    return(data.frame(
+        Date = rownames(price_data),
+        Price = price_series,
+        BB_Upper = BB_Upper,
+        BB_Lower = BB_Lower,
+        BB_Mean = BB_Mean,
+        Z_Statistic = Z,
+        Signal = signal
+    ))
+}
+
+# Step 3: Apply Function and Save to Excel
+signals_list <- lapply(price_data, calculate_signals)
+names(signals_list) <- colnames(price_data)
+
+save_to_excel <- function(signals_list, file_name = "bollinger_signals.xlsx") {
+    workbook <- createWorkbook()
+    
+    for (stock in names(signals_list)) {
+        if (!is.null(signals_list[[stock]])) {
+            sheet_data <- signals_list[[stock]]
+            sheet_name <- str_replace_all(stock, "[^A-Za-z0-9_]", "_")
+            addWorksheet(workbook, sheetName = sheet_name)
+            writeData(workbook, sheet = sheet_name, sheet_data)
+        }
+    }
+    
+    saveWorkbook(workbook, file_name, overwrite = TRUE)
+}
+
+save_to_excel(signals_list, "bollinger_signals.xlsx")
+print("Excel file saved successfully.")
+
+# Step 4: Dynamic Visualization with Shiny
+ui <- fluidPage(
+    
+    # Title
+    titlePanel("Dynamic Bollinger Signals Visualization"),
+    
+    # Sidebar layout
+    sidebarLayout(
+        sidebarPanel(
+            selectInput("stock", "Select Stock:", choices = names(signals_list)),
+            dateRangeInput("date_range", "Select Date Range:", start = min(price_data$Date), end = max(price_data$Date))
+        ),
+        
+        mainPanel(
+            plotOutput("bollinger_plot"),
+            DTOutput("signals_table")
+        )
+    )
+)
+
+server <- function(input, output, session) {
+    
+    filtered_data <- reactive({
+        req(input$stock, input$date_range)
+        data <- signals_list[[input$stock]]
+        data <- data %>% filter(Date >= input$date_range[1] & Date <= input$date_range[2])
+        return(data)
+    })
+    
+    output$bollinger_plot <- renderPlot({
+        req(filtered_data())
+        data <- filtered_data()
+        
+        # Use Python's matplotlib-like approach for plotting
+        par(mar = c(5, 5, 4, 2) + 0.1)
+        plot(as.Date(data$Date), data$Price, type = "l", col = "blue", lwd = 2, xlab = "Date", ylab = "Price",
+             main = paste("Bollinger Bands for", input$stock))
+        lines(as.Date(data$Date), data$BB_Upper, col = "red", lwd = 1.5)
+        lines(as.Date(data$Date), data$BB_Lower, col = "green", lwd = 1.5)
+        lines(as.Date(data$Date), data$BB_Mean, col = "orange", lwd = 1.5)
+        legend("topright", legend = c("Price", "BB Upper", "BB Lower", "BB Mean"), 
+               col = c("blue", "red", "green", "orange"), lty = 1, cex = 0.8)
+    })
+    
+    output$signals_table <- renderDT({
+        req(filtered_data())
+        datatable(filtered_data())
+    })
+}
+
+shinyApp(ui, server)
 
