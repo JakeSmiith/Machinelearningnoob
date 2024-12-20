@@ -1,0 +1,99 @@
+---
+title: "Automated Financial Model"
+author: "Jake Smith"
+date: "`r Sys.Date()`"
+output: pdf_document
+params:
+  file_path: "financial_statements.xlsx"
+---
+
+```{r setup, include=FALSE}
+# Load required libraries
+if (!requireNamespace("DBI")) install.packages("DBI")
+if (!requireNamespace("dplyr")) install.packages("dplyr")
+if (!requireNamespace("glue")) install.packages("glue")
+if (!requireNamespace("data.table")) install.packages("data.table")
+if (!requireNamespace("knitr")) install.packages("knitr")
+if (!requireNamespace("kableExtra")) install.packages("kableExtra")
+if (!requireNamespace("scales")) install.packages("scales")
+
+library(DBI)
+library(dplyr)
+library(glue)
+library(data.table)
+library(knitr)
+library(kableExtra)
+library(scales)
+
+# Global chunk options
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+Construct SQL Query and Fetch Data
+r
+Copy code
+# Mock database connection (Replace with actual database connection)
+# Example: db <- DBI::dbConnect(RSQLite::SQLite(), "path_to_database.db")
+db <- "Your database connection here"
+
+# Construct SQL query
+branch <- params$branch
+statement <- glue::glue_sql(
+  "SELECT * FROM financials WHERE branch = {branch}",
+  .con = db
+)
+
+# Execute query and fetch data
+mydata <- DBI::dbGetQuery(conn = db, statement = statement)
+
+# Define current year and month dynamically
+this_year <- format(Sys.Date(), "%Y")
+this_month <- format(Sys.Date(), "%m")
+right_now <- paste0(this_year, "-", this_month)
+# Wrangle and process the data
+final <- mydata %>%
+  dplyr::filter(date == right_now) %>%
+  dplyr::rename(
+    `Total Revenue` = totalRevenue,
+    `COGS` = costofGoodsAndServicesSold,
+    `Gross Profit` = grossProfit,
+    `SG&A` = sellingGeneralAndAdministrative,
+    `R&D` = researchAndDevelopment,
+    `Operating Expenses` = operatingExpenses,
+    `EBITDA` = ebitda,
+    `Depreciation and Amortisation` = depreciationAndAmortization,
+    `EBIT` = ebit,
+    `Interest Expense` = interestAndDebtExpense,
+    `Tax` = incomeTaxExpense,
+    `Net Income` = netIncome
+  ) %>%
+  dplyr::select(
+    `Total Revenue`,
+    `COGS`,
+    `Gross Profit`,
+    `SG&A`,
+    `R&D`,
+    `Operating Expenses`,
+    `EBITDA`,
+    `Depreciation and Amortisation`,
+    `EBIT`,
+    `Interest Expense`,
+    `Tax`,
+    `Net Income`
+  ) %>%
+  data.table::transpose(keep.names = "Fields")
+
+# Assign column names dynamically
+names(final) <- c("Fields", this_year)
+# Render the financial statement table
+final_kable <- final %>%
+  knitr::kable("latex", booktabs = TRUE, longtable = TRUE, align = c("l", "r")) %>%
+  kableExtra::kable_styling(
+    latex_options = c("scale_down"),
+    position = "left",
+    full_width = TRUE
+  ) %>%
+  kableExtra::kable_styling(font_size = 12) %>%
+  kableExtra::row_spec(3, bold = TRUE) %>%
+  kableExtra::row_spec(7, bold = TRUE) %>%
+  kableExtra::row_spec(12, bold = TRUE)
+
+final_kable
