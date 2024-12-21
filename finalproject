@@ -1,0 +1,66 @@
+---
+title: "."
+author: "Jake Smith"
+date: "`r Sys.Date()`"
+output:
+  word_document: default
+---
+The use of Bollinger Bands in financial analysis has gained significant traction as a robust tool for understanding price volatility and identifying trading opportunities. Bollinger Bands, a technical indicator developed by John Bollinger, consist of a moving average with upper and lower bands that adapt dynamically to market volatility(Bollinger, 2001).These bands provide traders with a visual framework to identify periods of relative price strength or weakness, as well as potential breakout or reversion points. In particular, mean reversion strategies, which assume that asset prices tend to revert to their historical average, are often employed alongside Bollinger Bands to capitalise on price fluctuations and market inefficiencies.
+
+1) Introduction
+
+The importance of such strategies lies in their ability to provide actionable insights in a wide range of market conditions. As markets become increasingly influenced by algorithmic trading and high-frequency strategies, understanding price behaviour through indicators like Bollinger Bands becomes essential for identifying profitable opportunities while mitigating risk. Mean reversion strategies complement this by focusing on statistical anomalies, enabling traders and portfolio managers to make data-driven decisions based on the likelihood of price reversion (Lo et al., 2007).
+
+This project aims to explore the relationship between Bollinger Bands and mean reversion strategies, assessing their effectiveness in different market environments. By employing visualisation and clustering techniques, this research will examine the statistical significance of price movements within Bollinger Bands and their predictive power for mean reversion. The insights gained from this study will not only enhance understanding of these strategies but also provide a foundation for developing more sophisticated trading models and risk management frameworks.
+
+As an ancillary objective, this project serves as an interactive financial visualisation tool. Some of the capabilities of the Shiny UI include an article scraper, examining causality between either the absolute or logarithmic prices of two stocks, and an article summariser, aiming to reduce the manual intensity of equity research when searching for a stock. Full code will be provided fo
+
+2) Literature Review
+
+Empirical research has demonstrated that Bollinger Bands are effective in identifying overbought and oversold conditions, which can guide trading decisions. A study by (Chong and Ng,2008) examined the use of Bollinger Bands in equity markets and found that incorporating them into trading strategies significantly improved returns in periods of high volatility. The research also highlighted the importance of adjusting the band parameters to suit different asset classes and timeframes.
+
+Further studies have investigated the use of Bollinger Bands in conjunction with other indicators to enhance predictive accuracy. For instance, Kumar and (Panneerselvam,2019) explored their integration with the Relative Strength Index (RSI) in emerging markets. The combination proved particularly effective in volatile markets, as it reduced false signals and improved the reliability of trade entry and exit points.
+
+Recent advancements in computational finance have also explored the application of Bollinger Bands in algorithmic trading. Studies like (Chen et al,2021) have leveraged machine learning models to dynamically adjust Bollinger Band parameters based on real-time market data, demonstrating improved profitability compared to static implementations.  
+
+3) Approach & Method
+
+To assess the effectiveness of Bollinger Bands and mean reversion strategies, I use a combination of data tables, histograms, boxplots, and screenshots from the Shiny UI.
+
+The scope of this project is the S&P500 constituents, which are pulled using the blpapi package from the Bloomberg Terminal in TPSC1.03. The stock prices are then converted into an Excel file, which is used for the remainder of the project to significantly reduce the number of API calls made, which is time-consuming. 
+
+The Bollinger Bands are created through a rule-based system, based on predefined thresholds for the Z-statistic. The logic BUY is made if Z is less than -2, SELL if Z is more than 2, and hold if the price is within the bands.
+
+# Z-Statistic Formula
+
+The Z-Statistic can be calculated using the following formula:
+
+\[
+Z = \frac{P - BB_{Mean}}{\sigma}
+\]
+
+Where:
+- \( Z \): Z-Statistic
+
+- \( P \): Current price of the stock
+
+- \( BB_{Mean} \): The middle Bollinger Band (typically a simple moving average)
+
+- \( \sigma \): Standard deviation of prices over the selected period.
+
+
+
+
+4) Bibliography
+
+Bollinger, J. (2001). Bollinger on Bollinger Bands. New York: McGraw-Hill.
+
+Lo, A.W., Mamaysky, H. and Wang, J. (2000). 'Foundations of Technical Analysis: Computational Algorithms, Statistical Inference, and Empirical Implementation', The Journal of Finance, 55(4), pp. 1705–1765.
+
+Chong, T.T.L. and Ng, W.K. (2008). 'Technical analysis and the London stock exchange: testing the MACD and RSI rules using the FT30', Applied Economics Letters, 15(14), pp. 1111–1114.
+
+Kumar, S. and Panneerselvam, A. (2019). 'Empirical Optimization of Bollinger Bands for Profitability', International Journal of Financial Markets and Derivatives, 7(2), pp. 150–165.
+
+Chen, H., Chong, T.T.L. and Duan, X. (2010). 'A principal-component approach to measuring investor sentiment', Quantitative Finance, 10(4), pp. 339–347.
+
+
