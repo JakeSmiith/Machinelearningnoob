@@ -29,6 +29,92 @@ To assess the effectiveness of Bollinger Bands and mean reversion strategies, I 
 
 The scope of this project is the S&P500 constituents, which are pulled using the blpapi package from the Bloomberg Terminal in TPSC1.03. The stock prices are then converted into an Excel file, which is used for the remainder of the project to significantly reduce the number of API calls made, which is time-consuming. 
 
+```{r, eval = FALSE}
+# Load necessary libraries
+library(Rblpapi)
+library(tidyverse)
+
+# Connect to Bloomberg
+blpConnect()
+
+# Define the full list of S&P 500 tickers in Bloomberg format
+# Assuming `ticker_full` is your predefined list of tickers in "US Equity" format
+
+# Define batch size and split `ticker_full` into batches of 100
+batch_size <- 100
+ticker_batches <- split(ticker_full, ceiling(seq_along(ticker_full) / batch_size))
+
+# Initialize an empty list to store data for each batch
+all_data <- list()
+
+# Loop through each batch
+for (i in seq_along(ticker_batches)) {
+    batch <- ticker_batches[[i]]
+    batch_data <- list()  # Temporary list to store each ticker's data within the batch
+    
+    # Loop through each ticker in the current batch
+    for (ticker in batch) {
+        # Fetch the adjusted close prices for the current ticker
+        ticker_data <- bdh(
+            securities = ticker,
+            fields = "PX_LAST",  
+            start.date = start_date,
+            end.date = end_date
+        )
+        
+        # Store the result in the batch_data list with the ticker as the name
+        batch_data[[ticker]] <- ticker_data
+        
+        # Pause for 2 seconds before the next request
+        Sys.sleep(2)
+    }
+    
+    # Combine the batch data and add it to all_data
+    all_data[[i]] <- bind_rows(batch_data, .id = "ticker")
+}
+
+# Combine all batches into a single data frame
+price_data <- bind_rows(all_data)
+
+# Optionally, reshape to have dates as rows and tickers as columns
+price_data_wide <- price_data %>%
+    pivot_wider(names_from = ticker, values_from = PX_LAST) %>%
+    rename(Date = date)
+
+# Display the head of the final combined data
+print(head(price_data_wide))
+
+save.image(file = "Machine_learning_noob.RData")
+summary(price_data_wide)
+dim(price_data_wide)
+
+# Load required library
+library(openxlsx)
+
+# Load the data from your specified file path
+load("C:/Users/jakes/Downloads/Machine_learning_noob.RData")
+
+# Check if 'price_data_wide' is loaded successfully
+if (exists("price_data_wide")) {
+  # Create a new workbook
+  wb <- createWorkbook()
+  
+  # Add a worksheet named "S&P500 Data"
+  addWorksheet(wb, "S&P500 Data")
+  
+  # Write the entire dataframe to the Excel worksheet
+  writeData(wb, "S&P500 Data", price_data_wide, startCol = 1, startRow = 1)
+  
+  # Save the workbook as an Excel file
+  saveWorkbook(wb, "C:/Users/jakes/Downloads/SP500_Data.xlsx", overwrite = TRUE)
+  
+  # Confirm output
+  cat("Excel file saved as 'C:/Users/jakes/Downloads/SP500_Data.xlsx'")
+} else {
+  cat("Error: 'price_data_wide' not found in the loaded RData file.")
+}
+```
+
 The Bollinger Bands are created through a rule-based system, based on predefined thresholds for the Z-statistic. The logic BUY is made if Z is less than -2, SELL if Z is more than 2, and hold if the price is within the bands.
 
 # Z-Statistic Formula
