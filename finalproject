@@ -415,13 +415,13 @@ $$
 v_{\text{filtered}}(t) = \sum_k c_{jk} \varphi_{jk}(t) + \sum_{j=j}^{\infty} \sum_k d_{jk} \varphi_{jk}(t)
 $$
 
-## B – Random Forest Algorithm
+## Random Forest Algorithm
 
 The advent of large datasets in modern applications necessitates learning algorithms that scale effectively with data volume while maintaining robust statistical performance. Random Forests, developed by (Breiman, 2001), are among the most successful methods for handling such data. As a supervised learning procedure, Random Forests build an ensemble of decision trees using the "divide and conquer" principle: splitting the dataset into random subsets, training individual predictors on these subsets, and aggregating their outputs.
 
 Whilst Random Forests are empirically effective, their theoretical underpinnings are much less developed (Biau & Scornet, 2016). (Breiman, 2001) laid out the foundation for Random Forests, providing an upper bound on the generalisation error, acknowledging that tree correlation through randomisation improves ensemble performance, whilst pertaining to the limited theoretical understanding of these interactions. (Lin & Jeon, 2006) explore the connection between Random Forests and nearest neighbour predictions.
 
-## C – Fuzzy Logic
+## Fuzzy Logic
 
 Fuzzy logic is a form of reasoning that deals with approximate rather than fixed reasoning. Unlike binary logic (0 and 1), it operates on degrees of truth (Zadeh, 1988). In the context of Bollinger Bands, the variables derived from Bollinger Bands are converted into fuzzy inputs such as distance from the bands, and band width. Membership functions represent the degree of membership of a variable in linguistic categories (for example: “low”, “medium”, and “high”). Membership functions define how each point in the input space is mapped to a degree of membership within the fuzzy set.
 
@@ -446,7 +446,7 @@ After this, trading signals are based on the fuzzy inputs; rules are constructed
 
 A fuzzy inference system processes the fuzzy inputs, applies the rules to determine the output. Bollinger Bands models tend to use either the Sugeno or Mamdani fuzzy inference system (Cheung and Kaymak, 2007). The Mamdani fuzzy inference system then leads to defuzzification.
 
-## D – Contrarian Framework
+## Contrarian Framework
 
 In Leyman’s terms, a contrarian approach is whereby investors act opposite to prevailing market trends or sentiment. Popular market opinions lead to mispricing of assets due to herd behaviour and emotional decision-making. An example of an individual who uses the Contrarian framework would be one who buys low and sells high.
 
