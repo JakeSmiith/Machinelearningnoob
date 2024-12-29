@@ -11,9 +11,9 @@ The use of Bollinger Bands in financial analysis has gained significant traction
 
 The importance of such strategies lies in their ability to provide actionable insights in a wide range of market conditions. As markets become increasingly influenced by algorithmic trading and high-frequency strategies, understanding price behaviour through indicators like Bollinger Bands becomes essential for identifying profitable opportunities while mitigating risk. Mean reversion strategies complement this by focusing on statistical anomalies, enabling traders and portfolio managers to make data-driven decisions based on the likelihood of price reversion (Lo et al., 2007).
 
-This project aims to explore the relationship between Bollinger Bands and mean reversion strategies, assessing their effectiveness in different market environments. By employing visualisation and clustering techniques, this research will examine the statistical significance of price movements within Bollinger Bands and their predictive power for mean reversion. The insights gained from this study will not only enhance understanding of these strategies but also provide a foundation for developing more sophisticated trading models and risk management frameworks.
+This project aims to explore the relationship between Bollinger Bands and mean reversion strategies, assessing their effectiveness in different market environments. By employing visualisation techniques, I aim to show the user how Bollinger Bands act as a foundation to more complex mean reversion strategies. The insights gained from this study will not only enhance understanding of these strategies but also provide a foundation for developing more sophisticated trading models and risk management frameworks.
 
-As an ancillary objective, this project serves as an interactive financial visualisation tool. Some of the capabilities of the Shiny UI include an article scraper, examining causality between either the absolute or logarithmic prices of two stocks, and an article summariser, aiming to reduce the manual intensity of equity research when searching for a stock. Full code will be provided fo
+As an ancillary objective, this project serves as an interactive financial visualisation tool, aiming to bridge the academia-reality bridge. Some of the capabilities of the Shiny UI include an article scraper, examining causality between either the absolute or logarithmic prices of two stocks, and an article summariser, aiming to reduce the manual intensity of equity research when searching for a stock. Full code will be provided throughout the bulk of the article, and in various appendix sections. 
 
 2) Literature Review
 
@@ -54,7 +54,7 @@ The Bollinger Bands mean reversion strategy is widely recognised, yet consensus 
 
 3) Approach & Method
 
-To assess the effectiveness of Bollinger Bands and mean reversion strategies, I use a combination of data tables, histograms, boxplots, and screenshots from the Shiny UI.
+I use a combination of data tables, histograms, boxplots, and screenshots from the Shiny UI.
 
 The scope of this project is the S&P500 constituents, which are pulled using the blpapi package from the Bloomberg Terminal in TPSC1.03. The stock prices are then converted into an Excel file, which is used for the remainder of the project to significantly reduce the number of API calls made, which is time-consuming. 
 
@@ -163,7 +163,82 @@ Where:
 
 - \( \sigma \): Standard deviation of prices over the selected period.
 
+```{r, eval = FALSE}
+# Load libraries
+library(openxlsx)
+library(quantmod)
+library(tidyverse)
+library(zoo)
+library(shiny)
+library(DT)
+
+# Step 1: Load and Clean Price Data
+price_data <- price_data_wide  # Replace with your actual dataset
+
+price_data <- price_data %>%
+    mutate(Date = as.Date(Date)) %>%
+    column_to_rownames("Date") %>%
+    select(where(~ any(!is.na(.)))) %>% 
+    mutate(across(everything(), as.numeric))  # Ensure all values are numeric
+
+# Step 2: Function to Calculate Bollinger Bands and Z-Statistic
+calculate_signals <- function(price_series, n = 20, k = 2) {
+    if (all(is.na(price_series))) return(NULL)
+    
+    BB_Upper <- BB_Lower <- BB_Mean <- Z <- rep(NA, length(price_series))
+    signal <- rep("HOLD", length(price_series))  # Default signal
+    
+    valid_indices <- which(!is.na(price_series))
+    if (length(valid_indices) >= n) {
+        bb <- BBands(price_series[valid_indices], n = n, sd = k)
+        rolling_sd <- rollapply(price_series[valid_indices], n, sd, fill = NA, align = "right")
+        
+        BB_Mean[valid_indices] <- bb[, "mavg"]
+        BB_Upper[valid_indices] <- bb[, "up"]
+        BB_Lower[valid_indices] <- bb[, "dn"]
+        Z[valid_indices] <- (price_series[valid_indices] - BB_Mean[valid_indices]) / rolling_sd
+        
+        signal[valid_indices][price_series[valid_indices] < BB_Lower[valid_indices] & Z[valid_indices] < -2] <- "BUY"
+        signal[valid_indices][price_series[valid_indices] > BB_Upper[valid_indices] & Z[valid_indices] > 2] <- "SELL"
+    }
+    
+    return(data.frame(
+        Date = rownames(price_data),
+        Price = price_series,
+        BB_Upper = BB_Upper,
+        BB_Lower = BB_Lower,
+        BB_Mean = BB_Mean,
+        Z_Statistic = Z,
+        Signal = signal
+    ))
+}
+
+# Step 3: Apply Function and Save to Excel
+signals_list <- lapply(price_data, calculate_signals)
+names(signals_list) <- colnames(price_data)
+
+save_to_excel <- function(signals_list, file_name = "bollinger_signals.xlsx") {
+    workbook <- createWorkbook()
+    
+    for (stock in names(signals_list)) {
+        if (!is.null(signals_list[[stock]])) {
+            sheet_data <- signals_list[[stock]]
+            sheet_name <- str_replace_all(stock, "[^A-Za-z0-9_]", "_")
+            addWorksheet(workbook, sheetName = sheet_name)
+            writeData(workbook, sheet = sheet_name, sheet_data)
+        }
+    }
+    
+    saveWorkbook(workbook, file_name, overwrite = TRUE)
+}
+
+save_to_excel(signals_list, "bollinger_signals.xlsx")
+print("Excel file saved successfully.")
+```
+
 4) Visualisations
+
+Once the Excel spreadsheet with adjusted closing prices for each constituent is made, I combined ggplot and plotly to allow the user to see a time-series graph of their desired stock(s)
 
 ## Shiny UI Screenshot
 
@@ -172,7 +247,7 @@ The following image demonstrates the user interface of the Shiny application cre
 ![Shiny UI Screenshot](ShinyUI.png)
 
 This screenshot illustrates the functionality of the interactive dashboard, showcasing features such as sliders, plots, and real-time visualisations.
-
+```
 
 5) Bibliography
 
