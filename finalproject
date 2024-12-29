@@ -17,11 +17,40 @@ As an ancillary objective, this project serves as an interactive financial visua
 
 2) Literature Review
 
-Empirical research has demonstrated that Bollinger Bands are effective in identifying overbought and oversold conditions, which can guide trading decisions. A study by (Chong and Ng,2008) examined the use of Bollinger Bands in equity markets and found that incorporating them into trading strategies significantly improved returns in periods of high volatility. The research also highlighted the importance of adjusting the band parameters to suit different asset classes and timeframes.
+A Bollinger Band is a technical analysis tool composed of three lines. The middle band is a simple moving average of the security’s price over a specified period (In our example, this is 20 days). The upper band is two standard deviations above the middle band, representing a dynamic resistance level, whereas the lower band lies at two standard deviations below the middle band, representing a dynamic support level (Bollinger, 1992). 
 
-Further studies have investigated the use of Bollinger Bands in conjunction with other indicators to enhance predictive accuracy. For instance, Kumar and (Panneerselvam,2019) explored their integration with the Relative Strength Index (RSI) in emerging markets. The combination proved particularly effective in volatile markets, as it reduced false signals and improved the reliability of trade entry and exit points.
+The mathematical derivation is as follows: 
+For any time t, the Bollinger Bands are:
 
-Recent advancements in computational finance have also explored the application of Bollinger Bands in algorithmic trading. Studies like (Chen et al,2021) have leveraged machine learning models to dynamically adjust Bollinger Band parameters based on real-time market data, demonstrating improved profitability compared to static implementations.  
+
+$$
+Middle\ Band\ (SMA) = \frac{1}{n} \sum_{i=t-n+1}^{t} P_i
+$$
+
+Standard Deviation: 
+
+$$
+\sigma_t = \sqrt{\frac{1}{n} \sum_{i=t-n+1}^{t} \left( P_i - \frac{1}{n} \sum_{j=t-n+1}^{t} P_j \right)^2}
+$$
+
+
+Note that $P_i - \frac{1}{n}$ is subtracted rather than added as standard deviation measures the distance data points deviate from the mean. Since deviations can be negative or positive, squaring ensures all deviations contribute positively to the variance.
+
+The lower and upper bands are expressed as:
+
+$$
+\text{Lower Band} = \frac{1}{n} \sum_{i=t-n+1}^{t} P_i - k \sqrt{\frac{1}{n} \sum_{i=t-n+1}^{t} \left(P_i - \text{SMA}_n\right)^2}
+$$
+
+$$
+\text{Upper Band} = \frac{1}{n} \sum_{i=t-n+1}^{t} P_i + k \sqrt{\frac{1}{n} \sum_{i=t-n+1}^{t} \left(P_i - \text{SMA}_n\right)^2}
+$$
+
+Applications in Financial Markets
+The Bollinger Bands mean reversion strategy is widely recognised, yet consensus around the most optimal application hasn’t yet converged. (Chen, Et al, 2018) explores a Bollinger Bands trading strategy based on wavelet analysis, considering returns, drawdowns, and the income-risk ratio. Using the CSI 300 stock index futures as the research subject, they applied wavelet noise reduction to the price data and found that the enhanced Bollinger Bands trading technique offered higher returns and lower risk compared with conventional BB. For more information on the derivation of wavelet noise reduction, please see the Appendix. (Yan, Et al, 2023) analysed returns in the HKSE based on Random Forest and Bollinger Bands. The performance of traditional BB and enhanced BB strategy are compared and concluded that a combination of traditional and enhanced BB generates higher returns than simply investing in stocks. More information around Random Forest can be found in the appendix. (Ravichandra & Hanif, 2015) explores how Bollinger Bands, combined with the RSI generate returns in the options and futures segments of the Indian market. 
+
+(Darmawan Et al, 2024) combines fuzzy logic with Bollinger Bands to improve decision-making in times of increased volatility, based off (Chlif Et al, 2023). The implementation of fuzzy logic with Bollinger Bands exhibited a higher level of precision compared with the MACD indicator and traditional BB, highlighting its efficacy in producing trade signals. Please see Appendix C for more information. To encapsulate the previous paragraphs, (Lento Et Al, 2007) evaluated the profitability of BB indicators, and found that after accounting for transaction costs, the traditional BB strategy struggles to outperform a simple buy and hold strategy, however, profitability improves when applied within a contrarian trading framework (Appendix D)
+
 
 3) Approach & Method
 
@@ -134,19 +163,124 @@ Where:
 
 - \( \sigma \): Standard deviation of prices over the selected period.
 
-
-
-
 4) Bibliography
 
-Bollinger, J. (2001). Bollinger on Bollinger Bands. New York: McGraw-Hill.
+Bollinger, J., 1992. Using bollinger bands. Stocks & Commodities, 10(2), pp.47-51. 
 
-Lo, A.W., Mamaysky, H. and Wang, J. (2000). 'Foundations of Technical Analysis: Computational Algorithms, Statistical Inference, and Empirical Implementation', The Journal of Finance, 55(4), pp. 1705–1765.
+Chen, S., Zhang, B., Zhou, G., & Qin, Q. (2018). Bollinger Bands Trading Strategy Based on Wavelet Analysis. Applied Economics and Finance, 5(3), pp. 49–57. Available at: https://doi.org/10.11114/aef.v5i3.3079
 
-Chong, T.T.L. and Ng, W.K. (2008). 'Technical analysis and the London stock exchange: testing the MACD and RSI rules using the FT30', Applied Economics Letters, 15(14), pp. 1111–1114.
+Yan, K., Wang, Y. and Li, Y., 2023. Enhanced Bollinger Band Stock Quantitative Trading Strategy Based on Random Forest. Artificial Intelligence Evolution, pp.22-33.
 
-Kumar, S. and Panneerselvam, A. (2019). 'Empirical Optimization of Bollinger Bands for Profitability', International Journal of Financial Markets and Derivatives, 7(2), pp. 150–165.
+Ravichandra, T. and Hanif, M., 2015. Bollinger bands optimal algorithmic strategyinstock trading. International Journal of Research in Finance and Marketing, 5(1), pp.1-9.
 
-Chen, H., Chong, T.T.L. and Duan, X. (2010). 'A principal-component approach to measuring investor sentiment', Quantitative Finance, 10(4), pp. 339–347.
+Darmawan, O. A., Heryadi, Y., Lukas, Wulandhari, L. A., & Sonata, I. (2024). The Utilization of Fuzzy Logic and Bollinger Bands to Enhance Trading Decision-Making During the Bitcoin Halving Phase. Procedia Computer Science, 245, pp. 272–281. Available at: https://www.sciencedirect.com/science/article/pii/S2452452024000272
 
+H. Chlif, D. Kanzari and Y. Ben Said, "An Adaptive Neuro Fuzzy to Predict Cryptocurrency Based on the Crisp Method: Case of COVID-19," 2023 IEEE International Conference on Advances in Data-Driven Analytics And Intelligent Systems (ADACIS), Marrakesh, Morocco, 2023, pp. 1-6, doi: 10.1109/ADACIS59737.2023.10424284.
+
+Lento, C., Gradojevic, N. and Wright, C.S., 2007. Investment information content in Bollinger Bands?. Applied Financial Economics Letters, 3(4), pp.263-267.
+
+Torrence, C. and Compo, G.P., 1998. A practical guide to wavelet analysis. Bulletin of the American Meteorological society, 79(1), pp.61-78.
+
+Manimaran, P., Panigrahi, P.K. and Parikh, J.C., 2005. Wavelet analysis and scaling properties of time series. Physical Review E—Statistical, Nonlinear, and Soft Matter Physics, 72(4), p.046120.
+
+Jansen, M., 2012. Noise reduction by wavelet thresholding (Vol. 161). Springer Science & Business Media.
+
+Breiman, L., 2001. Random forests. Machine learning, 45, pp.5-32.
+
+Biau, G. and Scornet, E., 2016. A random forest guided tour. Test, 25, pp.197-227.
+
+Lin, Y. and Jeon, Y., 2006. Random forests and adaptive nearest neighbors. Journal of the American Statistical Association, 101(474), pp.578-590.
+
+Zadeh, L.A., 1988. Fuzzy logic. Computer, 21(4), pp.83-93.
+
+Lauguico, S., Concepcion II, R., Alejandrino, J., Macasaet, D., Tobias, R.R., Bandala, A. and Dadios, E., 2019, November. A fuzzy logic-based stock market trading algorithm using bollinger bands. In 2019 IEEE 11th international conference on humanoid, nanotechnology, information technology, communication and control, environment, and management (HNICEM) (pp. 1-6). IEEE.
+
+Cheung, W.M. and Kaymak, U., 2007, November. A fuzzy logic based trading system. In Proceedings of the Third European Symposium on Nature-inspired Smart Information Systems (Vol. 59, pp. 1-60).
+
+# Appendix
+
+### A) Wavelet analysis
+
+Wavelet analysis is a mathematical tool for analysing non-stationary and noisy time-series data. Unlike Fourier Transform, which provides frequency-domain information without time localisation, wavelet analysis offers a multi-resolution approach, allowing for simultaneous examination of time and frequency components; theorised to be effective in financial markets, whereby trends and patterns occur at varying scales.
+
+As wavelet analysis decomposes a time-series into components at multiple scales using wavelet basis functions, a wavelet function satisfies the following properties:
+
+#### Zero Mean
+
+$$
+\int_{-\infty}^{\infty} \varphi(t) dt = 0
+$$
+
+This property ensures the wavelet function has equal positive and negative values, which cancel each other out when integrated across the entire time domain. This allows wavelets to detect changes or localised features (like sharp transitions) in the data, as opposed to representing constant trends.
+
+#### Finite Energy
+
+$$
+\int_{-\infty}^{\infty} |\varphi(t)|^2 dt < \infty
+$$
+
+This property ensures the wavelet function is localised in time, meaning it is significant within a finite region, which diminishes rapidly outside that region. This is ideal for analysing signals with transient changes, which exist in financial time-series (Torrence and Compo, 1998).
+
+Based on this theoretical foundation, wavelet decomposition simply decomposes signal $v(t)$ into low-frequency (trend) and high-frequency (detail or noise) components.
+
+Scaling coefficients represent the smooth, low-frequency components of the signal, where $\varphi_{jk}(t)$ is the scaling function.
+
+Wavelet coefficients represent the fine, high-frequency components capturing abrupt changes, whereby $\varphi_{jk}(t)$ is the wavelet function.
+
+$$
+c_{jk} = \langle v(t), \varphi_{jk}(t) \rangle
+$$
+
+The signal can be expressed as:
+
+$$
+v(t) = \sum_k c_{jk} \varphi_{jk}(t) + \sum_{j=j}^{\infty} \sum_k d_{jk} \varphi_{jk}(t)
+$$
+
+Hard thresholding is applied for noise reduction. Noise is effectively removed whilst retaining significant trends. This method preserves larger coefficients, whilst retaining sharp transitions in data, whereas discontinuities may be introduced at the threshold boundary. In contrast, soft thresholding shrinks coefficients towards zero by subtracting the threshold value. This helps yield smoother results and avoid discontinuities, yet this might distort the data for smaller coefficients. This area could be explored in the future to optimise data structures (Manimaran et al., 2005).
+
+$$
+T_{\text{thr}} = \sqrt{2 \log(n)} \cdot \sigma
+$$
+
+After thresholding, the filtered signal is reconstructed by combining the remaining coefficients (Jensen, 2012):
+
+$$
+v_{\text{filtered}}(t) = \sum_k c_{jk} \varphi_{jk}(t) + \sum_{j=j}^{\infty} \sum_k d_{jk} \varphi_{jk}(t)
+$$
+
+## B – Random Forest Algorithm
+
+The advent of large datasets in modern applications necessitates learning algorithms that scale effectively with data volume while maintaining robust statistical performance. Random Forests, developed by (Breiman, 2001), are among the most successful methods for handling such data. As a supervised learning procedure, Random Forests build an ensemble of decision trees using the "divide and conquer" principle: splitting the dataset into random subsets, training individual predictors on these subsets, and aggregating their outputs.
+
+Whilst Random Forests are empirically effective, their theoretical underpinnings are much less developed (Biau & Scornet, 2016). (Breiman, 2001) laid out the foundation for Random Forests, providing an upper bound on the generalisation error, acknowledging that tree correlation through randomisation improves ensemble performance, whilst pertaining to the limited theoretical understanding of these interactions. (Lin & Jeon, 2006) explore the connection between Random Forests and nearest neighbour predictions.
+
+## C – Fuzzy Logic
+
+Fuzzy logic is a form of reasoning that deals with approximate rather than fixed reasoning. Unlike binary logic (0 and 1), it operates on degrees of truth (Zadeh, 1988). In the context of Bollinger Bands, the variables derived from Bollinger Bands are converted into fuzzy inputs such as distance from the bands, and band width. Membership functions represent the degree of membership of a variable in linguistic categories (for example: “low”, “medium”, and “high”). Membership functions define how each point in the input space is mapped to a degree of membership within the fuzzy set.
+
+These degrees are represented as values between 0 and 1, where 0 means no membership, and 1 means full membership. The key purpose of this is to handle uncertainty and imprecision in data. The most common membership function for stock market data would be the Gaussian membership function as it’s argued that this type of distribution mimics natural distributions (Lauguico, 2019), (Darmawan, 2024). The Gaussian membership function takes the form:
+
+$$
+\mu_A(x) = e^{\frac{-(x-c)^2}{2\sigma^2}}
+$$
+
+The two parameters are:
+
+- **c** – Center  
+- **σ** – Standard Deviation  
+
+It’s important to note the parameters “low”, “medium”, “high” take the Triangular membership function.
+
+After this, trading signals are based on the fuzzy inputs; rules are constructed using the “IF-THEN” format. For example:
+
+> *“If the price is very close to the lower band AND the band width is wide, THEN generate a strong buy signal.”*
+
+> *“If the price is moderately close to the upper band AND the band width is narrow, THEN generate a weak sell signal.”*
+
+A fuzzy inference system processes the fuzzy inputs, applies the rules to determine the output. Bollinger Bands models tend to use either the Sugeno or Mamdani fuzzy inference system (Cheung and Kaymak, 2007). The Mamdani fuzzy inference system then leads to defuzzification.
+
+## D – Contrarian Framework
+
+In Leyman’s terms, a contrarian approach is whereby investors act opposite to prevailing market trends or sentiment. Popular market opinions lead to mispricing of assets due to herd behaviour and emotional decision-making. An example of an individual who uses the Contrarian framework would be one who buys low and sells high.
 
