@@ -163,7 +163,18 @@ Where:
 
 - \( \sigma \): Standard deviation of prices over the selected period.
 
-4) Bibliography
+4) Visualisations
+
+## Shiny UI Screenshot
+
+The following image demonstrates the user interface of the Shiny application created for this project:
+
+![Shiny UI Screenshot](ShinyUI.png)
+
+This screenshot illustrates the functionality of the interactive dashboard, showcasing features such as sliders, plots, and real-time visualisations.
+
+
+5) Bibliography
 
 Bollinger, J., 1992. Using bollinger bands. Stocks & Commodities, 10(2), pp.47-51. 
 
