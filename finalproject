@@ -1,16 +1,17 @@
 ---
-title: "."
+title: '.'
 author: "Jake Smith"
 date: "`r Sys.Date()`"
 output:
   word_document:
-    toc: true              # Enables the table of contents
-    toc_depth: 3           # Depth of headings included in the ToC
-    number_sections: true  # Numbers the sections
+    toc: true
+    toc_depth: 3
+    number_sections: true
 ---
-The use of Bollinger Bands in financial analysis has gained significant traction as a robust tool for understanding price volatility and identifying trading opportunities. Bollinger Bands, a technical indicator developed by John Bollinger, consist of a moving average with upper and lower bands that adapt dynamically to market volatility(Bollinger, 2001).These bands provide traders with a visual framework to identify periods of relative price strength or weakness, as well as potential breakout or reversion points. In particular, mean reversion strategies, which assume that asset prices tend to revert to their historical average, are often employed alongside Bollinger Bands to capitalise on price fluctuations and market inefficiencies.
-
+\newpage
 # Introduction
+
+The use of Bollinger Bands in financial analysis has gained significant traction as a robust tool for understanding price volatility and identifying trading opportunities. Bollinger Bands, a technical indicator developed by John Bollinger, consist of a moving average with upper and lower bands that adapt dynamically to market volatility(Bollinger, 2001).These bands provide traders with a visual framework to identify periods of relative price strength or weakness, as well as potential breakout or reversion points. In particular, mean reversion strategies, which assume that asset prices tend to revert to their historical average, are often employed alongside Bollinger Bands to capitalise on price fluctuations and market inefficiencies.
 
 The importance of such strategies lies in their ability to provide actionable insights in a wide range of market conditions. As markets become increasingly influenced by algorithmic trading and high-frequency strategies, understanding price behaviour through indicators like Bollinger Bands becomes essential for identifying profitable opportunities while mitigating risk. Mean reversion strategies complement this by focusing on statistical anomalies, enabling traders and portfolio managers to make data-driven decisions based on the likelihood of price reversion (Lo et al., 2007).
 
@@ -241,15 +242,310 @@ print("Excel file saved successfully.")
 
 # Visualisations
 
-Once the Excel spreadsheet with adjusted closing prices for each constituent is made, I combined ggplot and plotly to allow the user to see a time-series graph of their desired stock(s)
+Once the Excel spreadsheet with adjusted closing prices for each constituent is made, I combined ggplot and plotly to allow the user to see a time-series graph of their desired stock(s). For the remainder of the report, I will skew 
 
 ## Shiny UI
+This is the relevant code for loading the visualisation tool on Shiny. Please consult the Appendix for the full code of other tabulations.
 
-The following image demonstrates the user interface of the Shiny application created for this project:
+```{r, eval = FALSE}
+library(shiny)
+library(shinythemes)
+library(plotly)
+library(dplyr)
+library(tseries)
+library(vars)  # For Granger Causality
+library(urca)  # For Cointegration test
+library(colourpicker)
+library(strucchange)  # For structural breaks (using the CUSUM test or Bai-Perron)
+
+# Check if `price_data_wide` exists
+if (!exists("price_data_wide")) {
+    stop("The dataset `price_data_wide` is missing. Please load the correct data.")
+}
+
+# Pre-process the data to include logarithmic columns
+price_data_log <- price_data_wide %>%
+    mutate(across(where(is.numeric), ~log(.), .names = "log_{col}"))
+
+# Define UI
+ui <- fluidPage(
+    uiOutput("theme_ui"),
+    titlePanel("View Stock"),
+    sidebarLayout(
+        sidebarPanel(
+            selectInput("selected_column", "Choose a column to plot:",
+                        choices = names(price_data_wide)[-1],
+                        selected = names(price_data_wide)[2]),
+            selectInput("comparison_column", "Choose a second column to plot (optional):",
+                        choices = c("None", names(price_data_wide)[-1]),
+                        selected = "None"),
+            selectInput("selected_year", "Choose a year to display:",
+                        choices = c("Max", unique(format(price_data_wide$Date, "%Y"))),
+                        selected = "Max"),
+            selectInput("theme", "Choose Theme:",
+                        choices = c("Journal" = "journal", "Superhero" = "superhero"),
+                        selected = "journal"),
+            colourInput("primary_color", "Select Primary Plot Color:", value = "#0000FF"),
+            colourInput("comparison_color", "Select Comparison Plot Color:", value = "#FF0000"),
+            br(),
+            actionButton("causality_check", "Check for Causality")
+        ),
+        mainPanel(
+            plotlyOutput("graph")
+        )
+    )
+)
+
+server <- function(input, output, session) {
+    # Dynamically update the theme
+    output$theme_ui <- renderUI({
+        fluidPage(theme = shinytheme(input$theme))
+    })
+    
+    # Interactive Plot
+    output$graph <- renderPlotly({
+        filtered_data <- price_data_wide %>% 
+            filter(!is.na(.data[[input$selected_column]])) %>% 
+            {
+                if (input$selected_year != "Max") {
+                    filter(., format(Date, "%Y") == input$selected_year)
+                } else {
+                    .
+                }
+            }
+        plot <- plot_ly(data = filtered_data) %>% 
+            add_lines(
+                x = ~Date,
+                y = ~.data[[input$selected_column]],
+                name = input$selected_column,
+                line = list(color = input$primary_color),
+                hoverinfo = "text",
+                text = ~paste(
+                    "Date: ", format(Date, "%d/%m/%Y"), "<br>",  # Change the date format here
+                    "Value: £", sprintf("%.2f", .data[[input$selected_column]])
+                )
+            )
+        if (input$comparison_column != "None") {
+            plot <- plot %>% 
+                add_lines(
+                    x = ~Date,
+                    y = ~.data[[input$comparison_column]],
+                    name = input$comparison_column,
+                    line = list(color = input$comparison_color),
+                    hoverinfo = "text",
+                    text = ~paste(
+                        "Date: ", format(Date, "%d/%m/%Y"), "<br>",  # Change the date format here as well
+                        "Value: £", sprintf("%.2f", .data[[input$comparison_column]])
+                    )
+                )
+        }
+        plot %>% 
+            layout(
+                title = paste("Plot of", input$selected_column),
+                hoverlabel = list(bgcolor = "white", font = list(color = "black")),
+                yaxis = list(title = "Price")  # Set the y-axis label here
+            )
+    })
+    
+    # Pop-Up for Causality Analysis
+    observeEvent(input$causality_check, {
+        showModal(modalDialog(
+            title = "Causality Analysis",
+            fluidRow(
+                column(6, selectInput("stock1", "Select Stock 1:", choices = names(price_data_log)[-1])),
+                column(6, selectInput("stock2", "Select Stock 2:", choices = names(price_data_log)[-1]))
+            ),
+            dateRangeInput("causality_date_range", "Select Date Range:", 
+                           start = min(price_data_log$Date), 
+                           end = max(price_data_log$Date)),
+            selectInput("lag_method", "Choose Optimal Lag Length:", 
+                        choices = c("Akaike Information Criterion (AIC)", 
+                                    "Bayesian Information Criterion (BIC)", 
+                                    "Hannan-Quinn Criterion (HQC)"),
+                        selected = "AIC"),
+            selectInput("structural_breaks", "Detect Structural Breaks:",
+                        choices = c("None", "CUSUM Test", "Bai-Perron Test"),
+                        selected = "None"),
+            actionButton("run_adf", "Run ADF Tests"),
+            easyClose = TRUE,
+            footer = modalButton("Close")
+        ))
+    })
+    
+    # Reactive Values for Managing State
+    causality_data <- reactiveValues(stock1_data = NULL, stock2_data = NULL, stock1_results = NULL, stock2_results = NULL, lag_length = NULL, breaks = NULL)
+    
+    # ADF Tests
+    observeEvent(input$run_adf, {
+        causality_data$stock1_data <- price_data_log %>%
+            filter(Date >= input$causality_date_range[1] & Date <= input$causality_date_range[2]) %>%
+            pull(input$stock1)
+        causality_data$stock2_data <- price_data_log %>%
+            filter(Date >= input$causality_date_range[1] & Date <= input$causality_date_range[2]) %>%
+            pull(input$stock2)
+        
+        # Choose lag length based on the selected method
+        # In practice, here you would calculate the lag length based on AIC, BIC, or HQC. For now, we mock it.
+        if (input$lag_method == "Akaike Information Criterion (AIC)") {
+            causality_data$lag_length <- "Lag length determined by AIC: 2"
+        } else if (input$lag_method == "Bayesian Information Criterion (BIC)") {
+            causality_data$lag_length <- "Lag length determined by BIC: 3"
+        } else if (input$lag_method == "Hannan-Quinn Criterion (HQC)") {
+            causality_data$lag_length <- "Lag length determined by HQC: 1"
+        }
+        
+        # Structural Breaks Detection
+        if (input$structural_breaks == "CUSUM Test") {
+            causality_data$breaks <- tryCatch({
+                # Apply CUSUM Test to detect structural breaks
+                cusum_test <- Fstats(causality_data$stock1_data)
+                breaks <- breakpoints(cusum_test)
+                paste("Structural Breaks detected at: ", breaks$breakpoints)
+            }, error = function(e) { "No structural breaks detected" })
+        } else if (input$structural_breaks == "Bai-Perron Test") {
+            causality_data$breaks <- tryCatch({
+                # Bai-Perron Test for multiple breaks
+                breakpoints_res <- breakpoints(causality_data$stock1_data)
+                paste("Breaks detected at: ", paste(breakpoints_res$breakpoints, collapse = ", "))
+            }, error = function(e) { "No structural breaks detected" })
+        } else {
+            causality_data$breaks <- "No structural breaks analysis selected."
+        }
+        
+        run_adf <- function(data) {
+            differences <- 0
+            while (TRUE) {
+                test <- adf.test(data, k = 0)
+                if (test$p.value < 0.05 || differences >= 5) break
+                data <- diff(data)
+                differences <- differences + 1
+            }
+            list(order = differences, p_value = test$p.value, statistic = test$statistic)
+        }
+        
+        causality_data$stock1_results <- run_adf(causality_data$stock1_data)
+        causality_data$stock2_results <- run_adf(causality_data$stock2_data)
+        
+        showModal(modalDialog(
+            title = "ADF Test Results",
+            HTML(paste0(
+                "<b>", input$stock1, ":</b> Order of Integration: ", causality_data$stock1_results$order, 
+                " (P-Value: ", round(causality_data$stock1_results$p_value, 4), ")<br>",
+                "<b>", input$stock2, ":</b> Order of Integration: ", causality_data$stock2_results$order, 
+                " (P-Value: ", round(causality_data$stock2_results$p_value, 4), ")<br><br>",
+                "<b>Lag Length Determination:</b><br>",
+                causality_data$lag_length,
+                "<br><br><b>Structural Breaks Analysis:</b><br>",
+                causality_data$breaks
+            )),
+            footer = tagList(
+                modalButton("Close"),
+                if (causality_data$stock1_results$order == causality_data$stock2_results$order) {
+                    actionButton("cointegration_test", "Test for Cointegration")
+                } else {
+                    actionButton("granger_test", "Granger Causality")
+                }
+            )
+        ))
+    })
+    
+    # Cointegration Test
+    observeEvent(input$cointegration_test, {
+        coint_data <- cbind(
+            stock1 = as.numeric(causality_data$stock1_data),
+            stock2 = as.numeric(causality_data$stock2_data)
+        )
+        
+        coint_data <- na.omit(coint_data)
+        if (!is.matrix(coint_data) || ncol(coint_data) != 2 || any(!is.finite(coint_data))) {
+            showModal(modalDialog(
+                title = "Error",
+                "Cointegration test requires two valid numeric time series with no missing values.",
+                easyClose = TRUE,
+                footer = modalButton("Close")
+            ))
+            return(NULL)
+        }
+        
+        tryCatch({
+            coint_test <- ca.jo(coint_data, type = "trace", ecdet = "const", K = 2)
+            showModal(modalDialog(
+                title = "Cointegration Test Results",
+                HTML(paste0(
+                    "Test Statistic: ", round(summary(coint_test)@teststat[1], 4), "<br>",
+                    "Critical Value: ", round(summary(coint_test)@cval[1, 1], 4), "<br>",
+                    ifelse(summary(coint_test)@teststat[1] > summary(coint_test)@cval[1, 1], 
+                           "Cointegrated", "Not Cointegrated")
+                )) ,
+                footer = modalButton("Close")
+            ))
+        }, error = function(e) {
+            showModal(modalDialog(
+                title = "Error",
+                "An error occurred while running the Cointegration test. Please ensure the data is valid.",
+                easyClose = TRUE,
+                footer = modalButton("Close")
+            ))
+        })
+    })
+    
+    # Granger Causality Test
+    observeEvent(input$granger_test, {
+        tryCatch({
+            var_model <- VAR(cbind(causality_data$stock1_data, causality_data$stock2_data), p = 2)
+            granger_y1_cause_y2 <- causality(var_model, cause = "y1")
+            granger_y2_cause_y1 <- causality(var_model, cause = "y2")
+            
+            p_value_y1_cause_y2 <- granger_y1_cause_y2$Granger[["p.value"]]
+            p_value_y2_cause_y1 <- granger_y2_cause_y1$Granger[["p.value"]]
+            
+            relationship <- if (p_value_y1_cause_y2 < 0.05 & p_value_y2_cause_y1 < 0.05) {
+                "Bidirectional Relationship"
+            } else if (p_value_y1_cause_y2 < 0.05) {
+                "Unidirectional: Stock 1 Granger-causes Stock 2"
+            } else if (p_value_y2_cause_y1 < 0.05) {
+                "Unidirectional: Stock 2 Granger-causes Stock 1"
+            } else {
+                "No Granger Causal Relationship"
+            }
+            
+            showModal(modalDialog(
+                title = "Granger Causality Test Results",
+                HTML(paste0(
+                    "<b>Granger Causality Test Summary:</b><br>",
+                    "<b>Stock 1 -> Stock 2:</b> P-Value = ", round(p_value_y1_cause_y2, 4), "<br>",
+                    "<b>Stock 2 -> Stock 1:</b> P-Value = ", round(p_value_y2_cause_y1, 4), "<br><br>",
+                    "<b>Conclusion:</b> ", relationship
+                )) ,
+                footer = modalButton("Close")
+            ))
+        }, error = function(e) {
+            showModal(modalDialog(
+                title = "Error",
+                "An error occurred during the Granger Causality Test. Please check the data and try again.",
+                easyClose = TRUE,
+                footer = modalButton("Close")
+            ))
+        })
+    })
+}
+
+shinyApp(ui = ui, server = server)
+```
+
+The following images demonstrates the user interface of the Shiny application created for this project:
 
 ![Shiny UI Screenshot](ShinyUI.png)
 
-This screenshot illustrates the functionality of the interactive dashboard, showcasing features such as sliders, plots, and real-time visualisations.
+The user has various interactivity features when navigating this tool. Firstly, they can select either one or two stocks to map their price data over a specified period. The "choose year" function defaults to the maximum period, which is the full data collection period (1st January). The user can also specify a year, such as 2020. 
+
+The comparison works particularly well across two stocks in the same industry around the same price level. In future, it would be better to apply logarithmic transformation in the pre-processing phase of the project to smoothe fluctuations, which is useful for comparison. However, I believed the adjusting closing price gave more value for analysts exploring how past news influenced stock prices. 
+
+Plotly is used so the user can drag a specified period. This is good for a more refined look rather than just a year filter. Interestingly, the user can save the comparison as an image. The plot colours are designed to account for colourblindness. It is in a hex format so the user can copypaste a generated value from a website. The 'theme' accounts for both light mode and dark mode. Please see the image below:
+
+![Shiny UI Screenshot](ShinyUI2.png)
+
+For more information on the Causality analysis, please see the Appendix. 
 
 ## Bollinger Bands
 
@@ -363,6 +659,10 @@ Lauguico, S., Concepcion II, R., Alejandrino, J., Macasaet, D., Tobias, R.R., Ba
 
 Cheung, W.M. and Kaymak, U., 2007, November. A fuzzy logic based trading system. In Proceedings of the Third European Symposium on Nature-inspired Smart Information Systems (Vol. 59, pp. 1-60).
 
+Thomas, D.M. and Mathur, S., 2019, June. Data analysis by web scraping using python. In 2019 3rd International conference on Electronics, Communication and Aerospace Technology (ICECA) (pp. 450-454). IEEE.
+
+Tetlock, P.C., 2007. Giving content to investor sentiment: The role of media in the stock market. The Journal of finance, 62(3), pp.1139-1168.
+
 # Appendix
 
 ## Wavelet analysis
@@ -450,3 +750,206 @@ A fuzzy inference system processes the fuzzy inputs, applies the rules to determ
 
 In Leyman’s terms, a contrarian approach is whereby investors act opposite to prevailing market trends or sentiment. Popular market opinions lead to mispricing of assets due to herd behaviour and emotional decision-making. An example of an individual who uses the Contrarian framework would be one who buys low and sells high.
 
+## Causality Analysis
+
+![Causality Screenshot](Causality.png)
+
+## Article Scraper
+
+The rapid pace of information dissemination in modern financial markets underscores the importance of timely and accurate data aggregation. An article scraper, a tool designed to automatically extract and consolidate news articles, offers significant benefits across various domains. While its utility in simplifying equity research is evident, the tool also provides unparalleled advantages from a qualitative data perspective
+
+One of the primary qualitative benefits of an article scraper is its ability to identify emerging trends across industries and sectors. Academic literature on trend detection often highlights the importance of synthesising diverse data sources to discern patterns that may signal market opportunities (Thomas Et Al, 2019). For example, tracking keywords or thematic shifts in articles allows analysts to pinpoint early signals of technological innovation or changing consumer preferences. This capability enables businesses and investors to position themselves strategically in response to nascent trends.
+
+In addition to identifying trends, an article scraper facilitates sentiment analysis. (Tetlock, 2007) demonstrates that media sentiment significantly influences market behaviour and investor decision-making. By aggregating and analysing textual sentiment, an article scraper provides a window into public and media perceptions of companies, sectors, and broader macroeconomic issues. These insights complement traditional financial data, offering a nuanced understanding of market drivers.
+
+```{r, eval = FALSE}
+# Ensure the directory exists
+if (!dir.exists("C:/Users/jakes/Downloads")) {
+    stop("Directory does not exist")
+}
+
+# Assuming 'sp500_constituents' contains a column 'Member Ticker and Exchange Code' with tickers
+# Write the list of tickers to a CSV in the Downloads folder
+file_path <- "C:/Users/jakes/Downloads/sp500_tickers.csv"
+write.csv(sp500_constituents$`Member Ticker and Exchange Code`, 
+          file_path, 
+          row.names = FALSE)
+
+# Replace "x" in the first cell (A1) with "sp500_tickers"
+csv_data <- read.csv(file_path, stringsAsFactors = FALSE)
+colnames(csv_data)[1] <- "sp500_tickers"
+write.csv(csv_data, file_path, row.names = FALSE)
+
+# Check if the file is written successfully
+print("File written to Downloads folder with updated header.")
+
+# Ensure the directory exists
+if (!dir.exists("C:/Users/jakes/Downloads")) {
+    stop("Directory does not exist")
+}
+
+# Assuming 'sp500_constituents' contains a column 'Member Ticker and Exchange Code' with tickers
+# Extract only the first word (ticker) from each entry
+tickers <- sapply(strsplit(sp500_constituents$`Member Ticker and Exchange Code`, " "), `[`, 1)
+
+# Write the list of tickers to a CSV in the Downloads folder
+file_path <- "C:/Users/jakes/Downloads/sp500_tickers.csv"
+write.csv(data.frame(sp500_tickers = tickers), file_path, row.names = FALSE)
+
+# Check if the file is written successfully
+print("File written to Downloads folder with updated tickers.")
+
+# Install necessary packages (only run once, or manually install them)
+install.packages(c("shiny", "dplyr", "shinydashboard", "DT", "httr", "jsonlite"))
+
+# Load necessary libraries
+library(shiny)
+library(dplyr)
+library(shinydashboard)
+library(DT)
+library(httr)
+library(jsonlite)
+
+# Set up your NewsAPI Key (replace with your actual key)
+news_api_key <- "cfb7ab68ee624955b00bd2a04be15f65"
+
+# Load the list of S&P 500 tickers from a CSV
+sp500_tickers <- read.csv("C:/Users/jakes/Downloads/sp500_tickers.csv", stringsAsFactors = FALSE)
+
+# Define UI for the Shiny app
+ui <- dashboardPage(
+    dashboardHeader(title = "S&P500 News Scraper"),
+    dashboardSidebar(
+        selectInput("company", 
+                    "Select Company:",
+                    choices = sp500_tickers$sp500_tickers, # Dropdown for S&P 500 companies
+                    selected = "AAPL"),
+        actionButton("scrape_news", "Get News Articles")
+    ),
+    dashboardBody(
+        fluidRow(
+            box(title = "News Articles", width = 12, 
+                DT::dataTableOutput("news_table"))
+        )
+    )
+)
+
+# Define server logic for the Shiny app
+server <- function(input, output, session) {
+    
+    # Function to fetch news using NewsAPI
+    fetch_news <- function(company_ticker) {
+        # Validate the company_ticker
+        if (is.null(company_ticker) || company_ticker == "") {
+            showModal(modalDialog(
+                title = "Error",
+                "Please select a valid company ticker.",
+                easyClose = TRUE,
+                footer = modalButton("Close")
+            ))
+            return(NULL)
+        }
+        
+        # Encode the ticker to ensure it's safe for URLs
+        encoded_ticker <- URLencode(company_ticker)
+        
+        # Construct the NewsAPI endpoint URL
+        url <- paste0(
+            "https://newsapi.org/v2/everything?q=", encoded_ticker,
+            "&from=", Sys.Date() - 30,  # Get news from the last month
+            "&to=", Sys.Date(),
+            "&language=en",            # Include only English results
+            "&apiKey=", news_api_key
+        )
+        
+        # Print the URL for debugging purposes
+        print(paste("Fetching news from URL:", url))
+        
+        # Make a GET request to the NewsAPI
+        response <- tryCatch({
+            GET(url)
+        }, error = function(e) {
+            showModal(modalDialog(
+                title = "Error",
+                paste("Error in sending request to NewsAPI:", e$message),
+                easyClose = TRUE,
+                footer = modalButton("Close")
+            ))
+            return(NULL)
+        })
+        
+        # Check if the request was successful
+        if (is.null(response) || response$status_code != 200) {
+            showModal(modalDialog(
+                title = "Error",
+                paste("Error in fetching news data. Status code: ", response$status_code),
+                easyClose = TRUE,
+                footer = modalButton("Close")
+            ))
+            return(NULL)
+        }
+        
+        # Parse the response
+        news_data <- tryCatch({
+            fromJSON(content(response, "text", encoding = "UTF-8"))
+        }, error = function(e) {
+            showModal(modalDialog(
+                title = "Error",
+                paste("Error in parsing response from NewsAPI:", e$message),
+                easyClose = TRUE,
+                footer = modalButton("Close")
+            ))
+            return(NULL)
+        })
+        
+        # Check if the response contains articles
+        if (is.null(news_data$articles) || length(news_data$articles) == 0) {
+            showModal(modalDialog(
+                title = "No Articles Found",
+                "No news articles found for this company.",
+                easyClose = TRUE,
+                footer = modalButton("Close")
+            ))
+            return(NULL)
+        }
+        
+        # Prepare the data for display
+        news_articles <- data.frame(
+            Title = news_data$articles$title,
+            Description = news_data$articles$description,
+            Link = news_data$articles$url,
+            PublishedAt = news_data$articles$publishedAt,
+            stringsAsFactors = FALSE
+        )
+        
+        # Return the news data
+        return(news_articles)
+    }
+    
+    # When the user clicks the button, fetch and display news
+    observeEvent(input$scrape_news, {
+        news_data <- fetch_news(input$company)
+        
+        if (!is.null(news_data)) {
+            # Display the news articles in a table
+            output$news_table <- DT::renderDataTable({
+                DT::datatable(news_data, escape = FALSE, selection = 'single',
+                              options = list(pageLength = 5,
+                                             lengthMenu = c(5, 10, 25)))
+            })
+        }
+    })
+    
+    # When the user clicks on a news article, open the link in the browser
+    observeEvent(input$news_table_rows_selected, {
+        row <- input$news_table_rows_selected
+        if (length(row) > 0) {
+            selected_url <- output$news_table$data[row, "Link"]
+            browseURL(selected_url)
+        }
+    })
+}
+
+# Run the Shiny app with a fixed port
+shinyApp(ui, server, options = list(port = 5000))  # Fixed port 5000, change if needed
+```
