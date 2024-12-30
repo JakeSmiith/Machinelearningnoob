@@ -1,4 +1,5 @@
 library(shiny)
+library(shinythemes)
 library(dplyr)
 library(ggplot2)
 library(reshape2)
@@ -11,9 +12,39 @@ if (!exists("price_data_wide")) {
 }
 
 ui <- fluidPage(
+    theme = shinytheme("flatly"),  # Apply a predefined theme
+    tags$head(tags$style(HTML("
+        body {
+            background-color: #f9f9f9;
+            font-family: Arial, sans-serif;
+        }
+        h1, h4 {
+            color: #2c3e50;
+        }
+        .sidebar {
+            background-color: #ecf0f1;
+            border-radius: 10px;
+            padding: 20px;
+        }
+        .sidebar .selectize-control {
+            margin-bottom: 10px;
+        }
+        .main-panel {
+            border: 2px solid #bdc3c7;
+            border-radius: 10px;
+            background-color: #ffffff;
+            padding: 20px;
+        }
+        .error-message {
+            color: red;
+            font-weight: bold;
+            font-size: 16px;
+        }
+    "))),
     titlePanel("S&P 500 Correlation Matrix"),
     sidebarLayout(
         sidebarPanel(
+            class = "sidebar",
             h4("Correlation Matrix of S&P 500 Constituents"),
             helpText("Select stocks and date range for the heatmap."),
             dateRangeInput(
@@ -25,9 +56,11 @@ ui <- fluidPage(
                 max = max(price_data_wide$Date)
             ),
             uiOutput("available_stocks_ui"),  # Dynamic UI for available stocks
-            uiOutput("selected_stocks_ui")   # Dynamic UI for selected stocks
+            uiOutput("selected_stocks_ui"),  # Dynamic UI for selected stocks
+            actionButton("clear_all", "Clear All Stocks", class = "btn btn-danger")  # Clear all button
         ),
         mainPanel(
+            class = "main-panel",
             uiOutput("plot_or_message")  # Dynamic output: Plot or message
         )
     )
@@ -76,6 +109,12 @@ server <- function(input, output, session) {
         stock_pool$selected <- setdiff(stock_pool$selected, selected_to_remove)
     })
 
+    # Clear all stocks when the "Clear All" button is clicked
+    observeEvent(input$clear_all, {
+        stock_pool$available <- colnames(price_data_wide)[-1]  # Reset all stocks to available
+        stock_pool$selected <- character(0)  # Clear selected stocks
+    })
+
     # Reactive correlation matrix calculation
     correlation_matrix_data <- reactive({
         # Ensure at least two stocks are selected
@@ -115,7 +154,7 @@ server <- function(input, output, session) {
         if (is.null(cor_matrix)) {
             return(
                 div(
-                    style = "color: red; font-weight: bold;",
+                    class = "error-message",
                     "Error: No data available for the selected date range and stocks."
                 )
             )
@@ -135,7 +174,10 @@ server <- function(input, output, session) {
         plot_ly(
             data = cor_melted,
             x = ~Var1, y = ~Var2, z = ~value,
-            type = "heatmap", colors = colorRamp(c("red", "white", "blue")),
+            type = "heatmap",
+            colors = colorRamp(c("red", "white", "blue")),
+            zmin = -1,  # Set fixed scale minimum
+            zmax = 1,   # Set fixed scale maximum
             hoverinfo = "x+y+z"
         ) %>%
         layout(
