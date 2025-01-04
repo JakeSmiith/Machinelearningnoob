@@ -1,5 +1,5 @@
 ---
-title: '.'
+title: 'Evaluating the effectiveness of Bollinger Bands through visualisations.'
 author: "Jake Smith"
 date: "`r Sys.Date()`"
 output:
