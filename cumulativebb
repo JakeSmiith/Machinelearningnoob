@@ -1,0 +1,169 @@
+# Load necessary libraries
+library(shiny)
+library(plotly)
+library(DT)
+library(bslib)
+
+# UI Definition
+ui <- fluidPage(
+  theme = bs_theme(
+    bootswatch = "flatly",
+    primary = "#0056b3",
+    secondary = "#FF5733"
+  ),
+  
+  titlePanel(
+    tags$h1("Interactive Bollinger Bands Simulation", style = "text-align: center; color: #0056b3;")
+  ),
+  
+  sidebarLayout(
+    sidebarPanel(
+      tags$h4("Configuration", style = "color: #FF5733;"),
+      selectInput("ticker", "Select Ticker:", choices = NULL, selected = NULL),
+      dateRangeInput("date_range", "Select Date Range:", start = NULL, end = NULL),
+      actionButton("update", "Update", class = "btn-primary btn-lg"),
+      width = 3
+    ),
+    
+    mainPanel(
+      tabsetPanel(
+        tabPanel(
+          "Bar Chart",
+          tags$h3("Signal Proportions (BUY/SELL)", style = "text-align: center;"),
+          plotlyOutput("bar_chart", height = "400px")
+        ),
+        tabPanel(
+          "Scatter Plot",
+          tags$h3("Price with Bollinger Bands and Breaches", style = "text-align: center;"),
+          plotlyOutput("scatter_plot", height = "400px")
+        ),
+        tabPanel(
+          "Line Plot",
+          tags$h3("Cumulative Profit (£)", style = "text-align: center;"),
+          plotlyOutput("line_plot", height = "400px")
+        ),
+        tabPanel(
+          "Signal Table",
+          tags$h3("Detailed Signal Data", style = "text-align: center;"),
+          DTOutput("signals_table")
+        )
+      )
+    )
+  )
+)
+
+# Server Definition
+server <- function(input, output, session) {
+  # Reactive placeholder for ticker data
+  tickers <- reactive({
+    req(bollinger_signals) # Replace with actual data loading logic
+    names(bollinger_signals)
+  })
+  
+  # Update ticker input dynamically
+  observe({
+    updateSelectInput(session, "ticker", choices = tickers())
+  })
+  
+  # Reactive data based on user inputs
+  filtered_data <- reactive({
+    req(input$ticker, input$date_range, bollinger_signals)
+    data <- bollinger_signals[[input$ticker]]
+    data <- subset(data, Date >= input$date_range[1] & Date <= input$date_range[2])
+    data$Price <- as.numeric(data$Price)
+    data <- na.omit(data) # Remove rows with missing data
+    if (nrow(data) < 2) return(NULL)
+    data
+  })
+  
+  # Bar Chart for Signal Proportions (BUY and SELL only)
+  output$bar_chart <- renderPlotly({
+    req(filtered_data())
+    data <- filtered_data()
+    signal_counts <- table(data$Signal[data$Signal %in% c("BUY", "SELL")])
+    
+    plot_ly(
+      x = names(signal_counts),
+      y = as.numeric(signal_counts),
+      type = "bar",
+      marker = list(color = c("#1abc9c", "#e74c3c")) # Green for BUY, Red for SELL
+    ) %>%
+      layout(
+        title = paste("Signal Proportions (BUY/SELL) for", input$ticker),
+        xaxis = list(title = "Signal"),
+        yaxis = list(title = "Frequency"),
+        barmode = "group"
+      )
+  })
+  
+  # Scatter Plot with Bollinger Bands and Breaches
+  output$scatter_plot <- renderPlotly({
+    req(filtered_data())
+    data <- filtered_data()
+    
+    plot_ly(data, x = ~Date) %>%
+      add_lines(y = ~Price, name = "Price", line = list(color = "blue")) %>%
+      add_lines(y = ~BB_Upper, name = "BB Upper", line = list(color = "red", dash = "dash")) %>%
+      add_lines(y = ~BB_Lower, name = "BB Lower", line = list(color = "green", dash = "dash")) %>%
+      add_markers(data = subset(data, Signal == "BUY"), x = ~Date, y = ~Price, name = "BUY", marker = list(color = "green", size = 8)) %>%
+      add_markers(data = subset(data, Signal == "SELL"), x = ~Date, y = ~Price, name = "SELL", marker = list(color = "red", size = 8)) %>%
+      layout(
+        title = paste("Bollinger Bands for", input$ticker),
+        xaxis = list(title = "Date"),
+        yaxis = list(title = "Price")
+      )
+  })
+  
+  # Line Plot for Cumulative Profit (£) Based on BUY/SELL Signals
+  output$line_plot <- renderPlotly({
+    req(filtered_data())
+    data <- filtered_data()
+    
+    # Initialize variables
+    initial_capital <- 1e7 # £10,000,000
+    capital <- initial_capital
+    position <- 0 # Current position (shares)
+    cumulative_profit <- numeric(nrow(data))
+    
+    for (i in seq_len(nrow(data))) {
+      if (data$Signal[i] == "BUY") {
+        # Buy 10% of current capital worth of shares
+        shares_to_buy <- 0.1 * capital / data$Price[i]
+        position <- position + shares_to_buy
+        capital <- capital - (shares_to_buy * data$Price[i])
+      } else if (data$Signal[i] == "SELL") {
+        # Sell 10% of current position
+        shares_to_sell <- 0.1 * position
+        capital <- capital + (shares_to_sell * data$Price[i])
+        position <- position - shares_to_sell
+      }
+      # Update cumulative profit only on signal days
+      if (data$Signal[i] %in% c("BUY", "SELL")) {
+        cumulative_profit[i] <- capital + (position * data$Price[i]) - initial_capital
+      } else if (i > 1) {
+        cumulative_profit[i] <- cumulative_profit[i - 1]
+      }
+    }
+    
+    data$Cumulative_Profit <- cumulative_profit
+    
+    plot_ly(data, x = ~Date, y = ~Cumulative_Profit, type = "scatter", mode = "lines", line = list(color = "purple")) %>%
+      layout(
+        title = paste("Cumulative Profit (£) for", input$ticker),
+        xaxis = list(title = "Date"),
+        yaxis = list(title = "Cumulative Profit (£)"),
+        shapes = list(
+          list(type = "line", x0 = min(data$Date), x1 = max(data$Date), y0 = 0, y1 = 0, line = list(color = "gray", dash = "dash"))
+        )
+      )
+  })
+  
+  # Signal Table
+  output$signals_table <- renderDT({
+    req(filtered_data())
+    datatable(filtered_data(), options = list(pageLength = 10, autoWidth = TRUE))
+  })
+}
+
+# Run the application
+shinyApp(ui = ui, server = server)
