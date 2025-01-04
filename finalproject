@@ -11,11 +11,11 @@ output:
 \newpage
 # Introduction
 
-The use of Bollinger Bands in financial analysis has gained significant traction as a robust tool for understanding price volatility and identifying trading opportunities. Bollinger Bands, a technical indicator developed by John Bollinger, consist of a moving average with upper and lower bands that adapt dynamically to market volatility(Bollinger, 2001).These bands provide traders with a visual framework to identify periods of relative price strength or weakness, as well as potential breakout or reversion points. In particular, mean reversion strategies, which assume that asset prices tend to revert to their historical average, are often employed alongside Bollinger Bands to capitalise on price fluctuations and market inefficiencies.
+The use of Bollinger Bands in financial analysis and modelling gained traction throughout the last 30 years as a robust tool for understanding price volatility and identifying trading opportunities. Bollinger Bands, a technical indicator developed by John Bollinger, consist of a moving average with upper and lower bands that adapt dynamically to market volatility(Bollinger, 2001).These bands provide traders with a visual framework to identify periods of relative price strength or weakness, as well as potential breakout or reversion points. In particular, mean reversion strategies, which assume that asset prices tend to revert to their historical average, are often employed alongside Bollinger Bands to capitalise on price fluctuations and market inefficiencies.
 
 The importance of such strategies lies in their ability to provide actionable insights in a wide range of market conditions. As markets become increasingly influenced by algorithmic trading and high-frequency strategies, understanding price behaviour through indicators like Bollinger Bands becomes essential for identifying profitable opportunities while mitigating risk. Mean reversion strategies complement this by focusing on statistical anomalies, enabling traders and portfolio managers to make data-driven decisions based on the likelihood of price reversion (Lo et al., 2007).
 
-This project aims to explore the relationship between Bollinger Bands and mean reversion strategies, assessing their effectiveness in different market environments. By employing visualisation techniques, I aim to show the user how Bollinger Bands act as a foundation to more complex mean reversion strategies. The insights gained from this study will not only enhance understanding of these strategies but also provide a foundation for developing more sophisticated trading models and risk management frameworks.
+This project aims to evaluate the effectiveness of Bollinger Bands as a standalone tool, assessing their effectiveness in different scenarios. I show the user how Bollinger Bands act as a foundation to more complex mean reversion strategies.
 
 As an ancillary objective, this project serves as an interactive financial visualisation tool, aiming to bridge the academia-reality bridge. Some of the capabilities of the Shiny UI include an article scraper, examining causality between either the absolute or logarithmic prices of two stocks, and an article summariser, aiming to reduce the manual intensity of equity research when searching for a stock. Full code will be provided throughout the bulk of the article, and in various appendix sections. 
 
@@ -242,32 +242,65 @@ print("Excel file saved successfully.")
 
 # Visualisations
 
-Once the Excel spreadsheet with adjusted closing prices for each constituent is made, I combined ggplot and plotly to allow the user to see a time-series graph of their desired stock(s). For the remainder of the report, I will skew 
+Once the Excel spreadsheet with adjusted closing prices for each constituent is made, I combined ggplot and plotly to allow the user to see a time-series graph of their desired stock(s). 
 
 ## Shiny UI
-This is the relevant code for loading the visualisation tool on Shiny. Please consult the Appendix for the full code of other tabulations.
+This visualisation plots the adjusted closing price of each of the S&P constituents (503 firms) since Janaury 2010 until October 31st, 2024 (the date at which the data was stored). For the remainder of the main body, I focus on the key components driving the visualisation. For comprehensive code, please consult the Appendix.
+
+### Interactive plotting with plotly
+
 
 ```{r, eval = FALSE}
-library(shiny)
-library(shinythemes)
-library(plotly)
-library(dplyr)
-library(tseries)
-library(vars)  # For Granger Causality
-library(urca)  # For Cointegration test
-library(colourpicker)
-library(strucchange)  # For structural breaks (using the CUSUM test or Bai-Perron)
+output$graph <- renderPlotly({
+    filtered_data <- price_data_wide %>% 
+        filter(!is.na(.data[[input$selected_column]])) %>% 
+        {
+            if (input$selected_year != "Max") {
+                filter(., format(Date, "%Y") == input$selected_year)
+            } else {
+                .
+            }
+        }
+    plot <- plot_ly(data = filtered_data) %>% 
+        add_lines(
+            x = ~Date,
+            y = ~.data[[input$selected_column]],
+            name = input$selected_column,
+            line = list(color = input$primary_color),
+            hoverinfo = "text",
+            text = ~paste(
+                "Date: ", format(Date, "%d/%m/%Y"), "<br>",  
+                "Value: £", sprintf("%.2f", .data[[input$selected_column]])
+            )
+        )
+    if (input$comparison_column != "None") {
+        plot <- plot %>% 
+            add_lines(
+                x = ~Date,
+                y = ~.data[[input$comparison_column]],
+                name = input$comparison_column,
+                line = list(color = input$comparison_color),
+                hoverinfo = "text",
+                text = ~paste(
+                    "Date: ", format(Date, "%d/%m/%Y"), "<br>",  
+                    "Value: £", sprintf("%.2f", .data[[input$comparison_column]])
+                )
+            )
+    }
+    plot %>% 
+        layout(
+            title = paste("Plot of", input$selected_column),
+            hoverlabel = list(bgcolor = "white", font = list(color = "black")),
+            yaxis = list(title = "Price")
+        )
+})
+```
+![Shiny UI Screenshot](ShinyUI.png)
 
-# Check if `price_data_wide` exists
-if (!exists("price_data_wide")) {
-    stop("The dataset `price_data_wide` is missing. Please load the correct data.")
-}
+The dynamic data exploration feature of plotly allows the user to select specific constituents of the S&P500, enabling tailored exploration of the dataset depending on the firms they are interested in. The comparison feature allows users to overlay multiple data series on the same chart, making it easy to identify relationships between variables. The hover functionality (hoverinfo) provides detailed insights (e.g., date, value) for each data point directly on the graph. Users can extract critical information without needing to consult raw data tables.Dynamic updates based on year selection allow users to focus on specific time periods, making it easier to identify temporal patterns or events affecting the data. The inclusion of colour selectors for primary and comparison columns gives users control over the aesthetics.
 
-# Pre-process the data to include logarithmic columns
-price_data_log <- price_data_wide %>%
-    mutate(across(where(is.numeric), ~log(.), .names = "log_{col}"))
-
-# Define UI
+### User Interface design
+```{r, eval = FALSE}
 ui <- fluidPage(
     uiOutput("theme_ui"),
     titlePanel("View Stock"),
@@ -295,257 +328,35 @@ ui <- fluidPage(
         )
     )
 )
-
-server <- function(input, output, session) {
-    # Dynamically update the theme
-    output$theme_ui <- renderUI({
-        fluidPage(theme = shinytheme(input$theme))
-    })
-    
-    # Interactive Plot
-    output$graph <- renderPlotly({
-        filtered_data <- price_data_wide %>% 
-            filter(!is.na(.data[[input$selected_column]])) %>% 
-            {
-                if (input$selected_year != "Max") {
-                    filter(., format(Date, "%Y") == input$selected_year)
-                } else {
-                    .
-                }
-            }
-        plot <- plot_ly(data = filtered_data) %>% 
-            add_lines(
-                x = ~Date,
-                y = ~.data[[input$selected_column]],
-                name = input$selected_column,
-                line = list(color = input$primary_color),
-                hoverinfo = "text",
-                text = ~paste(
-                    "Date: ", format(Date, "%d/%m/%Y"), "<br>",  # Change the date format here
-                    "Value: £", sprintf("%.2f", .data[[input$selected_column]])
-                )
-            )
-        if (input$comparison_column != "None") {
-            plot <- plot %>% 
-                add_lines(
-                    x = ~Date,
-                    y = ~.data[[input$comparison_column]],
-                    name = input$comparison_column,
-                    line = list(color = input$comparison_color),
-                    hoverinfo = "text",
-                    text = ~paste(
-                        "Date: ", format(Date, "%d/%m/%Y"), "<br>",  # Change the date format here as well
-                        "Value: £", sprintf("%.2f", .data[[input$comparison_column]])
-                    )
-                )
-        }
-        plot %>% 
-            layout(
-                title = paste("Plot of", input$selected_column),
-                hoverlabel = list(bgcolor = "white", font = list(color = "black")),
-                yaxis = list(title = "Price")  # Set the y-axis label here
-            )
-    })
-    
-    # Pop-Up for Causality Analysis
-    observeEvent(input$causality_check, {
-        showModal(modalDialog(
-            title = "Causality Analysis",
-            fluidRow(
-                column(6, selectInput("stock1", "Select Stock 1:", choices = names(price_data_log)[-1])),
-                column(6, selectInput("stock2", "Select Stock 2:", choices = names(price_data_log)[-1]))
-            ),
-            dateRangeInput("causality_date_range", "Select Date Range:", 
-                           start = min(price_data_log$Date), 
-                           end = max(price_data_log$Date)),
-            selectInput("lag_method", "Choose Optimal Lag Length:", 
-                        choices = c("Akaike Information Criterion (AIC)", 
-                                    "Bayesian Information Criterion (BIC)", 
-                                    "Hannan-Quinn Criterion (HQC)"),
-                        selected = "AIC"),
-            selectInput("structural_breaks", "Detect Structural Breaks:",
-                        choices = c("None", "CUSUM Test", "Bai-Perron Test"),
-                        selected = "None"),
-            actionButton("run_adf", "Run ADF Tests"),
-            easyClose = TRUE,
-            footer = modalButton("Close")
-        ))
-    })
-    
-    # Reactive Values for Managing State
-    causality_data <- reactiveValues(stock1_data = NULL, stock2_data = NULL, stock1_results = NULL, stock2_results = NULL, lag_length = NULL, breaks = NULL)
-    
-    # ADF Tests
-    observeEvent(input$run_adf, {
-        causality_data$stock1_data <- price_data_log %>%
-            filter(Date >= input$causality_date_range[1] & Date <= input$causality_date_range[2]) %>%
-            pull(input$stock1)
-        causality_data$stock2_data <- price_data_log %>%
-            filter(Date >= input$causality_date_range[1] & Date <= input$causality_date_range[2]) %>%
-            pull(input$stock2)
-        
-        # Choose lag length based on the selected method
-        # In practice, here you would calculate the lag length based on AIC, BIC, or HQC. For now, we mock it.
-        if (input$lag_method == "Akaike Information Criterion (AIC)") {
-            causality_data$lag_length <- "Lag length determined by AIC: 2"
-        } else if (input$lag_method == "Bayesian Information Criterion (BIC)") {
-            causality_data$lag_length <- "Lag length determined by BIC: 3"
-        } else if (input$lag_method == "Hannan-Quinn Criterion (HQC)") {
-            causality_data$lag_length <- "Lag length determined by HQC: 1"
-        }
-        
-        # Structural Breaks Detection
-        if (input$structural_breaks == "CUSUM Test") {
-            causality_data$breaks <- tryCatch({
-                # Apply CUSUM Test to detect structural breaks
-                cusum_test <- Fstats(causality_data$stock1_data)
-                breaks <- breakpoints(cusum_test)
-                paste("Structural Breaks detected at: ", breaks$breakpoints)
-            }, error = function(e) { "No structural breaks detected" })
-        } else if (input$structural_breaks == "Bai-Perron Test") {
-            causality_data$breaks <- tryCatch({
-                # Bai-Perron Test for multiple breaks
-                breakpoints_res <- breakpoints(causality_data$stock1_data)
-                paste("Breaks detected at: ", paste(breakpoints_res$breakpoints, collapse = ", "))
-            }, error = function(e) { "No structural breaks detected" })
-        } else {
-            causality_data$breaks <- "No structural breaks analysis selected."
-        }
-        
-        run_adf <- function(data) {
-            differences <- 0
-            while (TRUE) {
-                test <- adf.test(data, k = 0)
-                if (test$p.value < 0.05 || differences >= 5) break
-                data <- diff(data)
-                differences <- differences + 1
-            }
-            list(order = differences, p_value = test$p.value, statistic = test$statistic)
-        }
-        
-        causality_data$stock1_results <- run_adf(causality_data$stock1_data)
-        causality_data$stock2_results <- run_adf(causality_data$stock2_data)
-        
-        showModal(modalDialog(
-            title = "ADF Test Results",
-            HTML(paste0(
-                "<b>", input$stock1, ":</b> Order of Integration: ", causality_data$stock1_results$order, 
-                " (P-Value: ", round(causality_data$stock1_results$p_value, 4), ")<br>",
-                "<b>", input$stock2, ":</b> Order of Integration: ", causality_data$stock2_results$order, 
-                " (P-Value: ", round(causality_data$stock2_results$p_value, 4), ")<br><br>",
-                "<b>Lag Length Determination:</b><br>",
-                causality_data$lag_length,
-                "<br><br><b>Structural Breaks Analysis:</b><br>",
-                causality_data$breaks
-            )),
-            footer = tagList(
-                modalButton("Close"),
-                if (causality_data$stock1_results$order == causality_data$stock2_results$order) {
-                    actionButton("cointegration_test", "Test for Cointegration")
-                } else {
-                    actionButton("granger_test", "Granger Causality")
-                }
-            )
-        ))
-    })
-    
-    # Cointegration Test
-    observeEvent(input$cointegration_test, {
-        coint_data <- cbind(
-            stock1 = as.numeric(causality_data$stock1_data),
-            stock2 = as.numeric(causality_data$stock2_data)
-        )
-        
-        coint_data <- na.omit(coint_data)
-        if (!is.matrix(coint_data) || ncol(coint_data) != 2 || any(!is.finite(coint_data))) {
-            showModal(modalDialog(
-                title = "Error",
-                "Cointegration test requires two valid numeric time series with no missing values.",
-                easyClose = TRUE,
-                footer = modalButton("Close")
-            ))
-            return(NULL)
-        }
-        
-        tryCatch({
-            coint_test <- ca.jo(coint_data, type = "trace", ecdet = "const", K = 2)
-            showModal(modalDialog(
-                title = "Cointegration Test Results",
-                HTML(paste0(
-                    "Test Statistic: ", round(summary(coint_test)@teststat[1], 4), "<br>",
-                    "Critical Value: ", round(summary(coint_test)@cval[1, 1], 4), "<br>",
-                    ifelse(summary(coint_test)@teststat[1] > summary(coint_test)@cval[1, 1], 
-                           "Cointegrated", "Not Cointegrated")
-                )) ,
-                footer = modalButton("Close")
-            ))
-        }, error = function(e) {
-            showModal(modalDialog(
-                title = "Error",
-                "An error occurred while running the Cointegration test. Please ensure the data is valid.",
-                easyClose = TRUE,
-                footer = modalButton("Close")
-            ))
-        })
-    })
-    
-    # Granger Causality Test
-    observeEvent(input$granger_test, {
-        tryCatch({
-            var_model <- VAR(cbind(causality_data$stock1_data, causality_data$stock2_data), p = 2)
-            granger_y1_cause_y2 <- causality(var_model, cause = "y1")
-            granger_y2_cause_y1 <- causality(var_model, cause = "y2")
-            
-            p_value_y1_cause_y2 <- granger_y1_cause_y2$Granger[["p.value"]]
-            p_value_y2_cause_y1 <- granger_y2_cause_y1$Granger[["p.value"]]
-            
-            relationship <- if (p_value_y1_cause_y2 < 0.05 & p_value_y2_cause_y1 < 0.05) {
-                "Bidirectional Relationship"
-            } else if (p_value_y1_cause_y2 < 0.05) {
-                "Unidirectional: Stock 1 Granger-causes Stock 2"
-            } else if (p_value_y2_cause_y1 < 0.05) {
-                "Unidirectional: Stock 2 Granger-causes Stock 1"
-            } else {
-                "No Granger Causal Relationship"
-            }
-            
-            showModal(modalDialog(
-                title = "Granger Causality Test Results",
-                HTML(paste0(
-                    "<b>Granger Causality Test Summary:</b><br>",
-                    "<b>Stock 1 -> Stock 2:</b> P-Value = ", round(p_value_y1_cause_y2, 4), "<br>",
-                    "<b>Stock 2 -> Stock 1:</b> P-Value = ", round(p_value_y2_cause_y1, 4), "<br><br>",
-                    "<b>Conclusion:</b> ", relationship
-                )) ,
-                footer = modalButton("Close")
-            ))
-        }, error = function(e) {
-            showModal(modalDialog(
-                title = "Error",
-                "An error occurred during the Granger Causality Test. Please check the data and try again.",
-                easyClose = TRUE,
-                footer = modalButton("Close")
-            ))
-        })
-    })
-}
-
-shinyApp(ui = ui, server = server)
 ```
+The structured layout, separating the sidebar panel for inputs and the main panel for outputs ensures a logical workflow. This minimises cognitive load and enhances user focus on the data being visualised. The use of fluidPage makes the UI responsive, ensuring seamless interaction across devices and screen sizes, making the application more versatile.
 
-The following images demonstrates the user interface of the Shiny application created for this project:
 
-![Shiny UI Screenshot](ShinyUI.png)
-
-The user has various interactivity features when navigating this tool. Firstly, they can select either one or two stocks to map their price data over a specified period. The "choose year" function defaults to the maximum period, which is the full data collection period (1st January). The user can also specify a year, such as 2020. 
-
-The comparison works particularly well across two stocks in the same industry around the same price level. In future, it would be better to apply logarithmic transformation in the pre-processing phase of the project to smoothe fluctuations, which is useful for comparison. However, I believed the adjusting closing price gave more value for analysts exploring how past news influenced stock prices. 
-
-Plotly is used so the user can drag a specified period. This is good for a more refined look rather than just a year filter. Interestingly, the user can save the comparison as an image. The plot colours are designed to account for colourblindness. It is in a hex format so the user can copypaste a generated value from a website. The 'theme' accounts for both light mode and dark mode. Please see the image below:
-
+### Theme Selection
+```{r, eval = FALSE}
+output$theme_ui <- renderUI({
+    fluidPage(theme = shinytheme(input$theme))
+})
+```
 ![Shiny UI Screenshot](ShinyUI2.png)
 
-For more information on the Causality analysis, please see the Appendix. 
+### Dynamic filtering of data
+```{r, eval = FALSE}
+filtered_data <- price_data_wide %>% 
+    filter(!is.na(.data[[input$selected_column]])) %>% 
+    {
+        if (input$selected_year != "Max") {
+            filter(., format(Date, "%Y") == input$selected_year)
+        } else {
+            .
+        }
+    }
+```
+The code filters out rows where the selected column contains missing values (NA), ensuring that only valid data is displayed in the visualisation. This reduces noise and potential errors. Filtering data dynamically based on user input reduces the amount of data processed and displayed in the visualisation, improving responsiveness and performance.
+
+
+
+The following images demonstrates the user interface of the Shiny application created for this project:
 
 ## Bollinger Bands
 
@@ -622,6 +433,76 @@ shinyApp(ui, server)
 knitr::include_graphics("BollingerBandsShiny.png")
 ```
 
+## Implications for Bollinger Bands - Correlation Matrix
+
+### Reactive correlation matrix calculation
+```{r, eval = FALSE}
+correlation_matrix_data <- reactive({
+    if (length(stock_pool$selected) < 2) {
+        return(NULL)
+    }
+
+    filtered_data <- price_data_wide %>%
+        filter(Date >= input$date_range[1] & Date <= input$date_range[2]) %>%
+        select(c("Date", all_of(stock_pool$selected))) %>%
+        mutate(across(!"Date", ~ (.x / lag(.x) - 1) * 100)) %>%
+        na.omit()
+
+    if (nrow(filtered_data) == 0) {
+        return(NULL)
+    }
+
+    price_changes_matrix <- filtered_data %>%
+        select(-Date)
+
+    cor_matrix <- cor(price_changes_matrix, use = "pairwise.complete.obs")
+
+    order <- seriate(as.dist(1 - cor_matrix), method = "HC")
+    cor_matrix <- cor_matrix[get_order(order), get_order(order)]
+    cor_matrix
+})
+```
+```{r, echo=FALSE}
+knitr::include_graphics("Correlation 2.png")
+```
+```{r, echo=FALSE}
+knitr::include_graphics("Correlation 1.png")
+```
+The matrix calculation dynamically calculates the correlation matrix based on user-selected stocks and date range, ensuring the visualisation is always reflective of the user’s input. The clustering via hierarchical seriation enhances visual interpretability by grouping similar stocks together in the heatmap. 
+
+```{r, eval = FALSE}
+output$correlation_matrix_plot <- renderPlotly({
+    cor_matrix <- correlation_matrix_data()
+
+    cor_melted <- melt(cor_matrix, varnames = c("Var1", "Var2"))
+
+    plot_ly(
+        data = cor_melted,
+        x = ~Var1, y = ~Var2, z = ~value,
+        type = "heatmap",
+        colors = colorRamp(c("red", "white", "blue")),
+        zmin = -1,
+        zmax = 1,
+        hoverinfo = "x+y+z"
+    ) %>%
+    layout(
+        title = "Correlation Matrix of Selected S&P 500 Stocks",
+        xaxis = list(title = "Stocks", tickangle = 45),
+        yaxis = list(title = "Stocks")
+    )
+})
+```
+The hoverinfo feature allows the user to drill down into individual correlation values for more precise insights. The colour gradient (red = negative, blue = positive) makes patterns and outliers immediately recognisable. 
+
+### Clear All Button
+
+```{r, eval = FALSE}
+observeEvent(input$clear_all, {
+    stock_pool$available <- colnames(price_data_wide)[-1]
+    stock_pool$selected <- character(0)
+})
+```
+This is a simple way to reset the stock pool and start fresh, streamlining user interaction. 
 
 
 
@@ -952,4 +833,488 @@ server <- function(input, output, session) {
 
 # Run the Shiny app with a fixed port
 shinyApp(ui, server, options = list(port = 5000))  # Fixed port 5000, change if needed
+```
+```{r, eval = FALSE}
+library(shiny)
+library(shinythemes)
+library(plotly)
+library(dplyr)
+library(tseries)
+library(vars)  # For Granger Causality
+library(urca)  # For Cointegration test
+library(colourpicker)
+library(strucchange)  # For structural breaks (using the CUSUM test or Bai-Perron)
+
+# Check if `price_data_wide` exists
+if (!exists("price_data_wide")) {
+    stop("The dataset `price_data_wide` is missing. Please load the correct data.")
+}
+
+# Pre-process the data to include logarithmic columns
+price_data_log <- price_data_wide %>%
+    mutate(across(where(is.numeric), ~log(.), .names = "log_{col}"))
+
+# Define UI
+ui <- fluidPage(
+    uiOutput("theme_ui"),
+    titlePanel("View Stock"),
+    sidebarLayout(
+        sidebarPanel(
+            selectInput("selected_column", "Choose a column to plot:",
+                        choices = names(price_data_wide)[-1],
+                        selected = names(price_data_wide)[2]),
+            selectInput("comparison_column", "Choose a second column to plot (optional):",
+                        choices = c("None", names(price_data_wide)[-1]),
+                        selected = "None"),
+            selectInput("selected_year", "Choose a year to display:",
+                        choices = c("Max", unique(format(price_data_wide$Date, "%Y"))),
+                        selected = "Max"),
+            selectInput("theme", "Choose Theme:",
+                        choices = c("Journal" = "journal", "Superhero" = "superhero"),
+                        selected = "journal"),
+            colourInput("primary_color", "Select Primary Plot Color:", value = "#0000FF"),
+            colourInput("comparison_color", "Select Comparison Plot Color:", value = "#FF0000"),
+            br(),
+            actionButton("causality_check", "Check for Causality")
+        ),
+        mainPanel(
+            plotlyOutput("graph")
+        )
+    )
+)
+
+server <- function(input, output, session) {
+    # Dynamically update the theme
+    output$theme_ui <- renderUI({
+        fluidPage(theme = shinytheme(input$theme))
+    })
+    
+    # Interactive Plot
+    output$graph <- renderPlotly({
+        filtered_data <- price_data_wide %>% 
+            filter(!is.na(.data[[input$selected_column]])) %>% 
+            {
+                if (input$selected_year != "Max") {
+                    filter(., format(Date, "%Y") == input$selected_year)
+                } else {
+                    .
+                }
+            }
+        plot <- plot_ly(data = filtered_data) %>% 
+            add_lines(
+                x = ~Date,
+                y = ~.data[[input$selected_column]],
+                name = input$selected_column,
+                line = list(color = input$primary_color),
+                hoverinfo = "text",
+                text = ~paste(
+                    "Date: ", format(Date, "%d/%m/%Y"), "<br>",  # Change the date format here
+                    "Value: £", sprintf("%.2f", .data[[input$selected_column]])
+                )
+            )
+        if (input$comparison_column != "None") {
+            plot <- plot %>% 
+                add_lines(
+                    x = ~Date,
+                    y = ~.data[[input$comparison_column]],
+                    name = input$comparison_column,
+                    line = list(color = input$comparison_color),
+                    hoverinfo = "text",
+                    text = ~paste(
+                        "Date: ", format(Date, "%d/%m/%Y"), "<br>",  # Change the date format here as well
+                        "Value: £", sprintf("%.2f", .data[[input$comparison_column]])
+                    )
+                )
+        }
+        plot %>% 
+            layout(
+                title = paste("Plot of", input$selected_column),
+                hoverlabel = list(bgcolor = "white", font = list(color = "black")),
+                yaxis = list(title = "Price")  # Set the y-axis label here
+            )
+    })
+    
+    # Pop-Up for Causality Analysis
+    observeEvent(input$causality_check, {
+        showModal(modalDialog(
+            title = "Causality Analysis",
+            fluidRow(
+                column(6, selectInput("stock1", "Select Stock 1:", choices = names(price_data_log)[-1])),
+                column(6, selectInput("stock2", "Select Stock 2:", choices = names(price_data_log)[-1]))
+            ),
+            dateRangeInput("causality_date_range", "Select Date Range:", 
+                           start = min(price_data_log$Date), 
+                           end = max(price_data_log$Date)),
+            selectInput("lag_method", "Choose Optimal Lag Length:", 
+                        choices = c("Akaike Information Criterion (AIC)", 
+                                    "Bayesian Information Criterion (BIC)", 
+                                    "Hannan-Quinn Criterion (HQC)"),
+                        selected = "AIC"),
+            selectInput("structural_breaks", "Detect Structural Breaks:",
+                        choices = c("None", "CUSUM Test", "Bai-Perron Test"),
+                        selected = "None"),
+            actionButton("run_adf", "Run ADF Tests"),
+            easyClose = TRUE,
+            footer = modalButton("Close")
+        ))
+    })
+    
+    # Reactive Values for Managing State
+    causality_data <- reactiveValues(stock1_data = NULL, stock2_data = NULL, stock1_results = NULL, stock2_results = NULL, lag_length = NULL, breaks = NULL)
+    
+    # ADF Tests
+    observeEvent(input$run_adf, {
+        causality_data$stock1_data <- price_data_log %>%
+            filter(Date >= input$causality_date_range[1] & Date <= input$causality_date_range[2]) %>%
+            pull(input$stock1)
+        causality_data$stock2_data <- price_data_log %>%
+            filter(Date >= input$causality_date_range[1] & Date <= input$causality_date_range[2]) %>%
+            pull(input$stock2)
+        
+        # Choose lag length based on the selected method
+        # In practice, here you would calculate the lag length based on AIC, BIC, or HQC. For now, we mock it.
+        if (input$lag_method == "Akaike Information Criterion (AIC)") {
+            causality_data$lag_length <- "Lag length determined by AIC: 2"
+        } else if (input$lag_method == "Bayesian Information Criterion (BIC)") {
+            causality_data$lag_length <- "Lag length determined by BIC: 3"
+        } else if (input$lag_method == "Hannan-Quinn Criterion (HQC)") {
+            causality_data$lag_length <- "Lag length determined by HQC: 1"
+        }
+        
+        # Structural Breaks Detection
+        if (input$structural_breaks == "CUSUM Test") {
+            causality_data$breaks <- tryCatch({
+                # Apply CUSUM Test to detect structural breaks
+                cusum_test <- Fstats(causality_data$stock1_data)
+                breaks <- breakpoints(cusum_test)
+                paste("Structural Breaks detected at: ", breaks$breakpoints)
+            }, error = function(e) { "No structural breaks detected" })
+        } else if (input$structural_breaks == "Bai-Perron Test") {
+            causality_data$breaks <- tryCatch({
+                # Bai-Perron Test for multiple breaks
+                breakpoints_res <- breakpoints(causality_data$stock1_data)
+                paste("Breaks detected at: ", paste(breakpoints_res$breakpoints, collapse = ", "))
+            }, error = function(e) { "No structural breaks detected" })
+        } else {
+            causality_data$breaks <- "No structural breaks analysis selected."
+        }
+        
+        run_adf <- function(data) {
+            differences <- 0
+            while (TRUE) {
+                test <- adf.test(data, k = 0)
+                if (test$p.value < 0.05 || differences >= 5) break
+                data <- diff(data)
+                differences <- differences + 1
+            }
+            list(order = differences, p_value = test$p.value, statistic = test$statistic)
+        }
+        
+        causality_data$stock1_results <- run_adf(causality_data$stock1_data)
+        causality_data$stock2_results <- run_adf(causality_data$stock2_data)
+        
+        showModal(modalDialog(
+            title = "ADF Test Results",
+            HTML(paste0(
+                "<b>", input$stock1, ":</b> Order of Integration: ", causality_data$stock1_results$order, 
+                " (P-Value: ", round(causality_data$stock1_results$p_value, 4), ")<br>",
+                "<b>", input$stock2, ":</b> Order of Integration: ", causality_data$stock2_results$order, 
+                " (P-Value: ", round(causality_data$stock2_results$p_value, 4), ")<br><br>",
+                "<b>Lag Length Determination:</b><br>",
+                causality_data$lag_length,
+                "<br><br><b>Structural Breaks Analysis:</b><br>",
+                causality_data$breaks
+            )),
+            footer = tagList(
+                modalButton("Close"),
+                if (causality_data$stock1_results$order == causality_data$stock2_results$order) {
+                    actionButton("cointegration_test", "Test for Cointegration")
+                } else {
+                    actionButton("granger_test", "Granger Causality")
+                }
+            )
+        ))
+    })
+    
+    # Cointegration Test
+    observeEvent(input$cointegration_test, {
+        coint_data <- cbind(
+            stock1 = as.numeric(causality_data$stock1_data),
+            stock2 = as.numeric(causality_data$stock2_data)
+        )
+        
+        coint_data <- na.omit(coint_data)
+        if (!is.matrix(coint_data) || ncol(coint_data) != 2 || any(!is.finite(coint_data))) {
+            showModal(modalDialog(
+                title = "Error",
+                "Cointegration test requires two valid numeric time series with no missing values.",
+                easyClose = TRUE,
+                footer = modalButton("Close")
+            ))
+            return(NULL)
+        }
+        
+        tryCatch({
+            coint_test <- ca.jo(coint_data, type = "trace", ecdet = "const", K = 2)
+            showModal(modalDialog(
+                title = "Cointegration Test Results",
+                HTML(paste0(
+                    "Test Statistic: ", round(summary(coint_test)@teststat[1], 4), "<br>",
+                    "Critical Value: ", round(summary(coint_test)@cval[1, 1], 4), "<br>",
+                    ifelse(summary(coint_test)@teststat[1] > summary(coint_test)@cval[1, 1], 
+                           "Cointegrated", "Not Cointegrated")
+                )) ,
+                footer = modalButton("Close")
+            ))
+        }, error = function(e) {
+            showModal(modalDialog(
+                title = "Error",
+                "An error occurred while running the Cointegration test. Please ensure the data is valid.",
+                easyClose = TRUE,
+                footer = modalButton("Close")
+            ))
+        })
+    })
+    
+    # Granger Causality Test
+    observeEvent(input$granger_test, {
+        tryCatch({
+            var_model <- VAR(cbind(causality_data$stock1_data, causality_data$stock2_data), p = 2)
+            granger_y1_cause_y2 <- causality(var_model, cause = "y1")
+            granger_y2_cause_y1 <- causality(var_model, cause = "y2")
+            
+            p_value_y1_cause_y2 <- granger_y1_cause_y2$Granger[["p.value"]]
+            p_value_y2_cause_y1 <- granger_y2_cause_y1$Granger[["p.value"]]
+            
+            relationship <- if (p_value_y1_cause_y2 < 0.05 & p_value_y2_cause_y1 < 0.05) {
+                "Bidirectional Relationship"
+            } else if (p_value_y1_cause_y2 < 0.05) {
+                "Unidirectional: Stock 1 Granger-causes Stock 2"
+            } else if (p_value_y2_cause_y1 < 0.05) {
+                "Unidirectional: Stock 2 Granger-causes Stock 1"
+            } else {
+                "No Granger Causal Relationship"
+            }
+            
+            showModal(modalDialog(
+                title = "Granger Causality Test Results",
+                HTML(paste0(
+                    "<b>Granger Causality Test Summary:</b><br>",
+                    "<b>Stock 1 -> Stock 2:</b> P-Value = ", round(p_value_y1_cause_y2, 4), "<br>",
+                    "<b>Stock 2 -> Stock 1:</b> P-Value = ", round(p_value_y2_cause_y1, 4), "<br><br>",
+                    "<b>Conclusion:</b> ", relationship
+                )) ,
+                footer = modalButton("Close")
+            ))
+        }, error = function(e) {
+            showModal(modalDialog(
+                title = "Error",
+                "An error occurred during the Granger Causality Test. Please check the data and try again.",
+                easyClose = TRUE,
+                footer = modalButton("Close")
+            ))
+        })
+    })
+}
+
+shinyApp(ui = ui, server = server)
+```
+
+
+
+## Correlation Matrix
+The full code can be found below: 
+```{r, eval = FALSE}
+library(shiny)
+library(shinythemes)
+library(dplyr)
+library(ggplot2)
+library(reshape2)
+library(seriation)
+library(plotly)
+
+# Ensure `price_data_wide` exists and is valid
+if (!exists("price_data_wide")) {
+    stop("The dataset `price_data_wide` is missing. Please load the correct data.")
+}
+
+ui <- fluidPage(
+    theme = shinytheme("flatly"),  # Apply a predefined theme
+    tags$head(tags$style(HTML("
+        body {
+            background-color: #f9f9f9;
+            font-family: Arial, sans-serif;
+        }
+        h1, h4 {
+            color: #2c3e50;
+        }
+        .sidebar {
+            background-color: #ecf0f1;
+            border-radius: 10px;
+            padding: 20px;
+        }
+        .sidebar .selectize-control {
+            margin-bottom: 10px;
+        }
+        .main-panel {
+            border: 2px solid #bdc3c7;
+            border-radius: 10px;
+            background-color: #ffffff;
+            padding: 20px;
+        }
+        .error-message {
+            color: red;
+            font-weight: bold;
+            font-size: 16px;
+        }
+    "))),
+    titlePanel("S&P 500 Correlation Matrix"),
+    sidebarLayout(
+        sidebarPanel(
+            class = "sidebar",
+            h4("Correlation Matrix of S&P 500 Constituents"),
+            helpText("Select stocks and date range for the heatmap."),
+            dateRangeInput(
+                "date_range",
+                "Choose Date Range:",
+                start = min(price_data_wide$Date),
+                end = max(price_data_wide$Date),
+                min = min(price_data_wide$Date),
+                max = max(price_data_wide$Date)
+            ),
+            uiOutput("available_stocks_ui"),  # Dynamic UI for available stocks
+            uiOutput("selected_stocks_ui"),  # Dynamic UI for selected stocks
+            actionButton("clear_all", "Clear All Stocks", class = "btn btn-danger")  # Clear all button
+        ),
+        mainPanel(
+            class = "main-panel",
+            uiOutput("plot_or_message")  # Dynamic output: Plot or message
+        )
+    )
+)
+
+server <- function(input, output, session) {
+    # Reactive values to manage the stock pool
+    stock_pool <- reactiveValues(
+        available = colnames(price_data_wide)[-1], # Initial stock pool (excluding Date)
+        selected = colnames(price_data_wide)[-1]  # Select all stocks by default
+    )
+
+    # Update UI for available stocks
+    output$available_stocks_ui <- renderUI({
+        selectInput(
+            "available_stocks",
+            "Available stocks:",
+            choices = stock_pool$available,
+            selected = NULL,
+            multiple = TRUE
+        )
+    })
+
+    # Update UI for selected stocks
+    output$selected_stocks_ui <- renderUI({
+        selectInput(
+            "selected_stocks",
+            "Selected stocks:",
+            choices = stock_pool$selected,
+            selected = stock_pool$selected,
+            multiple = TRUE
+        )
+    })
+
+    # Observe selection from available stocks to add
+    observeEvent(input$available_stocks, {
+        selected_to_add <- input$available_stocks
+        stock_pool$selected <- unique(c(stock_pool$selected, selected_to_add))
+        stock_pool$available <- setdiff(stock_pool$available, selected_to_add)
+    })
+
+    # Observe selection from selected stocks to remove
+    observeEvent(input$selected_stocks, {
+        selected_to_remove <- setdiff(stock_pool$selected, input$selected_stocks)
+        stock_pool$available <- unique(c(stock_pool$available, selected_to_remove))
+        stock_pool$selected <- setdiff(stock_pool$selected, selected_to_remove)
+    })
+
+    # Clear all stocks when the "Clear All" button is clicked
+    observeEvent(input$clear_all, {
+        stock_pool$available <- colnames(price_data_wide)[-1]  # Reset all stocks to available
+        stock_pool$selected <- character(0)  # Clear selected stocks
+    })
+
+    # Reactive correlation matrix calculation
+    correlation_matrix_data <- reactive({
+        # Ensure at least two stocks are selected
+        if (length(stock_pool$selected) < 2) {
+            return(NULL)
+        }
+
+        # Filter data by date range and selected stocks
+        filtered_data <- price_data_wide %>%
+            filter(Date >= input$date_range[1] & Date <= input$date_range[2]) %>%
+            select(c("Date", all_of(stock_pool$selected))) %>%
+            mutate(across(!"Date", ~ (.x / lag(.x) - 1) * 100)) %>%
+            na.omit()
+
+        # If filtered data is empty, return NULL
+        if (nrow(filtered_data) == 0) {
+            return(NULL)
+        }
+
+        # Drop the Date column for correlation matrix calculation
+        price_changes_matrix <- filtered_data %>%
+            select(-Date)
+
+        # Compute the correlation matrix (ranges between -1 and 1 naturally)
+        cor_matrix <- cor(price_changes_matrix, use = "pairwise.complete.obs")
+
+        # Cluster rows and columns
+        order <- seriate(as.dist(1 - cor_matrix), method = "HC")
+        cor_matrix <- cor_matrix[get_order(order), get_order(order)]
+        cor_matrix
+    })
+
+    # Dynamic output: Either plot or message
+    output$plot_or_message <- renderUI({
+        cor_matrix <- correlation_matrix_data()
+
+        if (is.null(cor_matrix)) {
+            return(
+                div(
+                    class = "error-message",
+                    "Error: No data available for the selected date range and stocks."
+                )
+            )
+        }
+
+        plotlyOutput("correlation_matrix_plot")
+    })
+
+    # Render the interactive heatmap
+    output$correlation_matrix_plot <- renderPlotly({
+        cor_matrix <- correlation_matrix_data()
+
+        # Melt the correlation matrix for plotly
+        cor_melted <- melt(cor_matrix, varnames = c("Var1", "Var2"))
+
+        # Generate interactive heatmap
+        plot_ly(
+            data = cor_melted,
+            x = ~Var1, y = ~Var2, z = ~value,
+            type = "heatmap",
+            colors = colorRamp(c("red", "white", "blue")),
+            zmin = -1,  # Set fixed scale minimum
+            zmax = 1,   # Set fixed scale maximum
+            hoverinfo = "x+y+z"
+        ) %>%
+        layout(
+            title = "Correlation Matrix of Selected S&P 500 Stocks",
+            xaxis = list(title = "Stocks", tickangle = 45),
+            yaxis = list(title = "Stocks")
+        )
+    })
+}
+
+# Run the application
+shinyApp(ui = ui, server = server)
 ```
