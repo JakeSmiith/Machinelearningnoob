@@ -58,9 +58,11 @@ The Bollinger Bands mean reversion strategy is widely recognised, yet consensus 
 
 # Approach & Method
 
-I use a combination of data tables, histograms, boxplots, and screenshots from the Shiny UI.
+I use a combination of data tables, histograms, boxplots, and screenshots from the Shiny UI. 
 
-The scope of this project is the S&P500 constituents, which are pulled using the blpapi package from the Bloomberg Terminal in TPSC1.03. The stock prices are then converted into an Excel file, which is used for the remainder of the project to significantly reduce the number of API calls made, which is time-consuming. 
+Although the code is applicable and scalable for all of the S&P500 constituents, the visualisations to show the product of the code are for AAPL. The S&P500 constituents are are pulled using the blpapi package from the Bloomberg Terminal in TPSC1.03. The stock prices are then converted into an Excel file, which is used for the remainder of the project to significantly reduce the number of API calls made, which is time-consuming. 
+
+For detailed information about different constituents of the S&P500, please consult the Appendix. 
 
 ```{r, eval = FALSE}
 # Load necessary libraries
@@ -354,9 +356,16 @@ filtered_data <- price_data_wide %>%
 ```
 The code filters out rows where the selected column contains missing values (NA), ensuring that only valid data is displayed in the visualisation. This reduces noise and potential errors. Filtering data dynamically based on user input reduces the amount of data processed and displayed in the visualisation, improving responsiveness and performance.
 
+### Comments
 
+AAPL exhibits a long-term bullish trend, reflective of its consistent revenue growth (5 year average YoY growth rate of 9% as of 2024, increases to 12% in 2022.) and market leadership in technology (please see Appendix for the scripts I ran to obtain the Excel files to compute the growth rates), leading to elevated valuations determining continued upwards price action. The COVID-19 period saw an accelerated price growth during this period, which is linked to an increased resilience on technology, with heightened demand for AAPL products. Supressed interest rates and global stimulus measures further helped valuations for AAPL.
 
-The following images demonstrates the user interface of the Shiny application created for this project:
+Reflective of their beta above 1, this graph reinforces their higher volatility compared to other S&P500 constituents, reflecting its sensitivity to market sentiment and the broader macroeconomy. For example, a notable correction in 2022 occured, which coincides with the FED tightening, and prevailing rotation out of growth stocks into value-oriented sectors. 
+
+Another interesting area is their product launch cycle. After events are announced, a pre-announcement rally tends to occur (iPhone XS September 2018, iPhone 11 2019, M1 chip MacBooks November 2020), reinforcing the herd behaviour exhibited in  mega-cap stocks. Investors tend to then "sell the news" on launch day, unless significant innovation or unexpected announcements occur, leading to a reversion in its stock price. 
+
+Therefore, there may be periods of overbuying and overselling, improving the suitability of Bollinger Bands for AAPL. 
+
 
 ## Bollinger Bands
 
@@ -504,7 +513,36 @@ observeEvent(input$clear_all, {
 ```
 This is a simple way to reset the stock pool and start fresh, streamlining user interaction. 
 
+## Bollinger Bands simulation
 
+```{r, echo=FALSE}
+knitr::include_graphics("Buy-sell signals AAPL.png")
+```
+(Insert underlying code) 
+
+### Appropriateness of Bollinger Bands for AAPL - Discussion
+
+Firstly, there is a disparity in signal frequency throughout the almost 15-year simulation (262 "SELL" signals opposed to 150 "BUY" signals). The following theories have been proposed as to why this phenomena occurs... Efficient market hypothesis would suggest the frequent sell conditions are attributed to a pattern of overpricing and overbought conditions within the historical data, whereby prices revert to their mean after temporary deviations. However, given the continuous upwards trajectory in AAPL over the last decade, this suggests a trend rather than a purely efficient market (Malkiel, 2003). AAPL's price doesn't show dramatic drops that match the asymmetric volatility hypothesis during most of the time period, however, during the Covid-19 pandeic, there was a notable dip, supporting the hypothesis for periods of market stress. Generally, AAPL's market resilience dampens the theory's overall impact (Bekaert and Wu, 2000). Finally, loss aversion suggests that investors act defensively, prompting disproportionate SELL signals. This theory still struggles to explain the long-term trend. 
+
+Therefore, a key limitation of Bollinger Bands is its performance in trending markets. In a sustained uptrend (for example between 2017 and 2019) the prices consistently breach the upper band, thus not reflecting the actual overbought conditions, failing to consider market resilience or long-term growth. Bollinger Bands merely interprets statistical anomolies. 
+
+### Efficacy as a trading strategy
+
+```{r, echo=FALSE}
+knitr::include_graphics("Cumprofit0.png")
+```
+
+```{r, echo=FALSE}
+knitr::include_graphics("Cumprofit1.png")
+```
+
+```{r, echo=FALSE}
+knitr::include_graphics("Cumprofit2.png")
+```
+
+# Conclusion
+
+Bollinger Bands serve as an effective tool for determining oscillations in a stationary stock. However, they should not be the sole driver of an algorithmic trading strategy due to the high turnover generated through frequent position changes. The frequency of these position changes entirely erodes cumulative profit at 1.155% for AAPL, which underscores a key tradeoff - The inverse relationship between risk-adjusted returns and turnover from high-frequency trading.  
 
 # Bibliography
 
@@ -543,6 +581,10 @@ Cheung, W.M. and Kaymak, U., 2007, November. A fuzzy logic based trading system.
 Thomas, D.M. and Mathur, S., 2019, June. Data analysis by web scraping using python. In 2019 3rd International conference on Electronics, Communication and Aerospace Technology (ICECA) (pp. 450-454). IEEE.
 
 Tetlock, P.C., 2007. Giving content to investor sentiment: The role of media in the stock market. The Journal of finance, 62(3), pp.1139-1168.
+
+Malkiel, B.G., 2003. The efficient market hypothesis and its critics. Journal of economic perspectives, 17(1), pp.59-82.
+
+Bekaert, G. and Wu, G., 2000. Asymmetric volatility and risk in equity markets. The review of financial studies, 13(1), pp.1-42.
 
 # Appendix
 
@@ -635,205 +677,8 @@ In Leyman’s terms, a contrarian approach is whereby investors act opposite to 
 
 ![Causality Screenshot](Causality.png)
 
-## Article Scraper
+Please see the full code below: 
 
-The rapid pace of information dissemination in modern financial markets underscores the importance of timely and accurate data aggregation. An article scraper, a tool designed to automatically extract and consolidate news articles, offers significant benefits across various domains. While its utility in simplifying equity research is evident, the tool also provides unparalleled advantages from a qualitative data perspective
-
-One of the primary qualitative benefits of an article scraper is its ability to identify emerging trends across industries and sectors. Academic literature on trend detection often highlights the importance of synthesising diverse data sources to discern patterns that may signal market opportunities (Thomas Et Al, 2019). For example, tracking keywords or thematic shifts in articles allows analysts to pinpoint early signals of technological innovation or changing consumer preferences. This capability enables businesses and investors to position themselves strategically in response to nascent trends.
-
-In addition to identifying trends, an article scraper facilitates sentiment analysis. (Tetlock, 2007) demonstrates that media sentiment significantly influences market behaviour and investor decision-making. By aggregating and analysing textual sentiment, an article scraper provides a window into public and media perceptions of companies, sectors, and broader macroeconomic issues. These insights complement traditional financial data, offering a nuanced understanding of market drivers.
-
-```{r, eval = FALSE}
-# Ensure the directory exists
-if (!dir.exists("C:/Users/jakes/Downloads")) {
-    stop("Directory does not exist")
-}
-
-# Assuming 'sp500_constituents' contains a column 'Member Ticker and Exchange Code' with tickers
-# Write the list of tickers to a CSV in the Downloads folder
-file_path <- "C:/Users/jakes/Downloads/sp500_tickers.csv"
-write.csv(sp500_constituents$`Member Ticker and Exchange Code`, 
-          file_path, 
-          row.names = FALSE)
-
-# Replace "x" in the first cell (A1) with "sp500_tickers"
-csv_data <- read.csv(file_path, stringsAsFactors = FALSE)
-colnames(csv_data)[1] <- "sp500_tickers"
-write.csv(csv_data, file_path, row.names = FALSE)
-
-# Check if the file is written successfully
-print("File written to Downloads folder with updated header.")
-
-# Ensure the directory exists
-if (!dir.exists("C:/Users/jakes/Downloads")) {
-    stop("Directory does not exist")
-}
-
-# Assuming 'sp500_constituents' contains a column 'Member Ticker and Exchange Code' with tickers
-# Extract only the first word (ticker) from each entry
-tickers <- sapply(strsplit(sp500_constituents$`Member Ticker and Exchange Code`, " "), `[`, 1)
-
-# Write the list of tickers to a CSV in the Downloads folder
-file_path <- "C:/Users/jakes/Downloads/sp500_tickers.csv"
-write.csv(data.frame(sp500_tickers = tickers), file_path, row.names = FALSE)
-
-# Check if the file is written successfully
-print("File written to Downloads folder with updated tickers.")
-
-# Install necessary packages (only run once, or manually install them)
-install.packages(c("shiny", "dplyr", "shinydashboard", "DT", "httr", "jsonlite"))
-
-# Load necessary libraries
-library(shiny)
-library(dplyr)
-library(shinydashboard)
-library(DT)
-library(httr)
-library(jsonlite)
-
-# Set up your NewsAPI Key (replace with your actual key)
-news_api_key <- "cfb7ab68ee624955b00bd2a04be15f65"
-
-# Load the list of S&P 500 tickers from a CSV
-sp500_tickers <- read.csv("C:/Users/jakes/Downloads/sp500_tickers.csv", stringsAsFactors = FALSE)
-
-# Define UI for the Shiny app
-ui <- dashboardPage(
-    dashboardHeader(title = "S&P500 News Scraper"),
-    dashboardSidebar(
-        selectInput("company", 
-                    "Select Company:",
-                    choices = sp500_tickers$sp500_tickers, # Dropdown for S&P 500 companies
-                    selected = "AAPL"),
-        actionButton("scrape_news", "Get News Articles")
-    ),
-    dashboardBody(
-        fluidRow(
-            box(title = "News Articles", width = 12, 
-                DT::dataTableOutput("news_table"))
-        )
-    )
-)
-
-# Define server logic for the Shiny app
-server <- function(input, output, session) {
-    
-    # Function to fetch news using NewsAPI
-    fetch_news <- function(company_ticker) {
-        # Validate the company_ticker
-        if (is.null(company_ticker) || company_ticker == "") {
-            showModal(modalDialog(
-                title = "Error",
-                "Please select a valid company ticker.",
-                easyClose = TRUE,
-                footer = modalButton("Close")
-            ))
-            return(NULL)
-        }
-        
-        # Encode the ticker to ensure it's safe for URLs
-        encoded_ticker <- URLencode(company_ticker)
-        
-        # Construct the NewsAPI endpoint URL
-        url <- paste0(
-            "https://newsapi.org/v2/everything?q=", encoded_ticker,
-            "&from=", Sys.Date() - 30,  # Get news from the last month
-            "&to=", Sys.Date(),
-            "&language=en",            # Include only English results
-            "&apiKey=", news_api_key
-        )
-        
-        # Print the URL for debugging purposes
-        print(paste("Fetching news from URL:", url))
-        
-        # Make a GET request to the NewsAPI
-        response <- tryCatch({
-            GET(url)
-        }, error = function(e) {
-            showModal(modalDialog(
-                title = "Error",
-                paste("Error in sending request to NewsAPI:", e$message),
-                easyClose = TRUE,
-                footer = modalButton("Close")
-            ))
-            return(NULL)
-        })
-        
-        # Check if the request was successful
-        if (is.null(response) || response$status_code != 200) {
-            showModal(modalDialog(
-                title = "Error",
-                paste("Error in fetching news data. Status code: ", response$status_code),
-                easyClose = TRUE,
-                footer = modalButton("Close")
-            ))
-            return(NULL)
-        }
-        
-        # Parse the response
-        news_data <- tryCatch({
-            fromJSON(content(response, "text", encoding = "UTF-8"))
-        }, error = function(e) {
-            showModal(modalDialog(
-                title = "Error",
-                paste("Error in parsing response from NewsAPI:", e$message),
-                easyClose = TRUE,
-                footer = modalButton("Close")
-            ))
-            return(NULL)
-        })
-        
-        # Check if the response contains articles
-        if (is.null(news_data$articles) || length(news_data$articles) == 0) {
-            showModal(modalDialog(
-                title = "No Articles Found",
-                "No news articles found for this company.",
-                easyClose = TRUE,
-                footer = modalButton("Close")
-            ))
-            return(NULL)
-        }
-        
-        # Prepare the data for display
-        news_articles <- data.frame(
-            Title = news_data$articles$title,
-            Description = news_data$articles$description,
-            Link = news_data$articles$url,
-            PublishedAt = news_data$articles$publishedAt,
-            stringsAsFactors = FALSE
-        )
-        
-        # Return the news data
-        return(news_articles)
-    }
-    
-    # When the user clicks the button, fetch and display news
-    observeEvent(input$scrape_news, {
-        news_data <- fetch_news(input$company)
-        
-        if (!is.null(news_data)) {
-            # Display the news articles in a table
-            output$news_table <- DT::renderDataTable({
-                DT::datatable(news_data, escape = FALSE, selection = 'single',
-                              options = list(pageLength = 5,
-                                             lengthMenu = c(5, 10, 25)))
-            })
-        }
-    })
-    
-    # When the user clicks on a news article, open the link in the browser
-    observeEvent(input$news_table_rows_selected, {
-        row <- input$news_table_rows_selected
-        if (length(row) > 0) {
-            selected_url <- output$news_table$data[row, "Link"]
-            browseURL(selected_url)
-        }
-    })
-}
-
-# Run the Shiny app with a fixed port
-shinyApp(ui, server, options = list(port = 5000))  # Fixed port 5000, change if needed
-```
 ```{r, eval = FALSE}
 library(shiny)
 library(shinythemes)
@@ -1121,6 +966,205 @@ shinyApp(ui = ui, server = server)
 ```
 
 
+## Article Scraper
+
+The rapid pace of information dissemination in modern financial markets underscores the importance of timely and accurate data aggregation. An article scraper, a tool designed to automatically extract and consolidate news articles, offers significant benefits across various domains. While its utility in simplifying equity research is evident, the tool also provides unparalleled advantages from a qualitative data perspective
+
+One of the primary qualitative benefits of an article scraper is its ability to identify emerging trends across industries and sectors. Academic literature on trend detection often highlights the importance of synthesising diverse data sources to discern patterns that may signal market opportunities (Thomas Et Al, 2019). For example, tracking keywords or thematic shifts in articles allows analysts to pinpoint early signals of technological innovation or changing consumer preferences. This capability enables businesses and investors to position themselves strategically in response to nascent trends.
+
+In addition to identifying trends, an article scraper facilitates sentiment analysis. (Tetlock, 2007) demonstrates that media sentiment significantly influences market behaviour and investor decision-making. By aggregating and analysing textual sentiment, an article scraper provides a window into public and media perceptions of companies, sectors, and broader macroeconomic issues. These insights complement traditional financial data, offering a nuanced understanding of market drivers.
+
+```{r, eval = FALSE}
+# Ensure the directory exists
+if (!dir.exists("C:/Users/jakes/Downloads")) {
+    stop("Directory does not exist")
+}
+
+# Assuming 'sp500_constituents' contains a column 'Member Ticker and Exchange Code' with tickers
+# Write the list of tickers to a CSV in the Downloads folder
+file_path <- "C:/Users/jakes/Downloads/sp500_tickers.csv"
+write.csv(sp500_constituents$`Member Ticker and Exchange Code`, 
+          file_path, 
+          row.names = FALSE)
+
+# Replace "x" in the first cell (A1) with "sp500_tickers"
+csv_data <- read.csv(file_path, stringsAsFactors = FALSE)
+colnames(csv_data)[1] <- "sp500_tickers"
+write.csv(csv_data, file_path, row.names = FALSE)
+
+# Check if the file is written successfully
+print("File written to Downloads folder with updated header.")
+
+# Ensure the directory exists
+if (!dir.exists("C:/Users/jakes/Downloads")) {
+    stop("Directory does not exist")
+}
+
+# Assuming 'sp500_constituents' contains a column 'Member Ticker and Exchange Code' with tickers
+# Extract only the first word (ticker) from each entry
+tickers <- sapply(strsplit(sp500_constituents$`Member Ticker and Exchange Code`, " "), `[`, 1)
+
+# Write the list of tickers to a CSV in the Downloads folder
+file_path <- "C:/Users/jakes/Downloads/sp500_tickers.csv"
+write.csv(data.frame(sp500_tickers = tickers), file_path, row.names = FALSE)
+
+# Check if the file is written successfully
+print("File written to Downloads folder with updated tickers.")
+
+# Install necessary packages (only run once, or manually install them)
+install.packages(c("shiny", "dplyr", "shinydashboard", "DT", "httr", "jsonlite"))
+
+# Load necessary libraries
+library(shiny)
+library(dplyr)
+library(shinydashboard)
+library(DT)
+library(httr)
+library(jsonlite)
+
+# Set up your NewsAPI Key (replace with your actual key)
+news_api_key <- "cfb7ab68ee624955b00bd2a04be15f65"
+
+# Load the list of S&P 500 tickers from a CSV
+sp500_tickers <- read.csv("C:/Users/jakes/Downloads/sp500_tickers.csv", stringsAsFactors = FALSE)
+
+# Define UI for the Shiny app
+ui <- dashboardPage(
+    dashboardHeader(title = "S&P500 News Scraper"),
+    dashboardSidebar(
+        selectInput("company", 
+                    "Select Company:",
+                    choices = sp500_tickers$sp500_tickers, # Dropdown for S&P 500 companies
+                    selected = "AAPL"),
+        actionButton("scrape_news", "Get News Articles")
+    ),
+    dashboardBody(
+        fluidRow(
+            box(title = "News Articles", width = 12, 
+                DT::dataTableOutput("news_table"))
+        )
+    )
+)
+
+# Define server logic for the Shiny app
+server <- function(input, output, session) {
+    
+    # Function to fetch news using NewsAPI
+    fetch_news <- function(company_ticker) {
+        # Validate the company_ticker
+        if (is.null(company_ticker) || company_ticker == "") {
+            showModal(modalDialog(
+                title = "Error",
+                "Please select a valid company ticker.",
+                easyClose = TRUE,
+                footer = modalButton("Close")
+            ))
+            return(NULL)
+        }
+        
+        # Encode the ticker to ensure it's safe for URLs
+        encoded_ticker <- URLencode(company_ticker)
+        
+        # Construct the NewsAPI endpoint URL
+        url <- paste0(
+            "https://newsapi.org/v2/everything?q=", encoded_ticker,
+            "&from=", Sys.Date() - 30,  # Get news from the last month
+            "&to=", Sys.Date(),
+            "&language=en",            # Include only English results
+            "&apiKey=", news_api_key
+        )
+        
+        # Print the URL for debugging purposes
+        print(paste("Fetching news from URL:", url))
+        
+        # Make a GET request to the NewsAPI
+        response <- tryCatch({
+            GET(url)
+        }, error = function(e) {
+            showModal(modalDialog(
+                title = "Error",
+                paste("Error in sending request to NewsAPI:", e$message),
+                easyClose = TRUE,
+                footer = modalButton("Close")
+            ))
+            return(NULL)
+        })
+        
+        # Check if the request was successful
+        if (is.null(response) || response$status_code != 200) {
+            showModal(modalDialog(
+                title = "Error",
+                paste("Error in fetching news data. Status code: ", response$status_code),
+                easyClose = TRUE,
+                footer = modalButton("Close")
+            ))
+            return(NULL)
+        }
+        
+        # Parse the response
+        news_data <- tryCatch({
+            fromJSON(content(response, "text", encoding = "UTF-8"))
+        }, error = function(e) {
+            showModal(modalDialog(
+                title = "Error",
+                paste("Error in parsing response from NewsAPI:", e$message),
+                easyClose = TRUE,
+                footer = modalButton("Close")
+            ))
+            return(NULL)
+        })
+        
+        # Check if the response contains articles
+        if (is.null(news_data$articles) || length(news_data$articles) == 0) {
+            showModal(modalDialog(
+                title = "No Articles Found",
+                "No news articles found for this company.",
+                easyClose = TRUE,
+                footer = modalButton("Close")
+            ))
+            return(NULL)
+        }
+        
+        # Prepare the data for display
+        news_articles <- data.frame(
+            Title = news_data$articles$title,
+            Description = news_data$articles$description,
+            Link = news_data$articles$url,
+            PublishedAt = news_data$articles$publishedAt,
+            stringsAsFactors = FALSE
+        )
+        
+        # Return the news data
+        return(news_articles)
+    }
+    
+    # When the user clicks the button, fetch and display news
+    observeEvent(input$scrape_news, {
+        news_data <- fetch_news(input$company)
+        
+        if (!is.null(news_data)) {
+            # Display the news articles in a table
+            output$news_table <- DT::renderDataTable({
+                DT::datatable(news_data, escape = FALSE, selection = 'single',
+                              options = list(pageLength = 5,
+                                             lengthMenu = c(5, 10, 25)))
+            })
+        }
+    })
+    
+    # When the user clicks on a news article, open the link in the browser
+    observeEvent(input$news_table_rows_selected, {
+        row <- input$news_table_rows_selected
+        if (length(row) > 0) {
+            selected_url <- output$news_table$data[row, "Link"]
+            browseURL(selected_url)
+        }
+    })
+}
+
+# Run the Shiny app with a fixed port
+shinyApp(ui, server, options = list(port = 5000))  # Fixed port 5000, change if needed
+```
 
 ## Correlation Matrix
 The full code can be found below: 
@@ -1318,3 +1362,321 @@ server <- function(input, output, session) {
 # Run the application
 shinyApp(ui = ui, server = server)
 ```
+## Bollinger Bands Visualisation tool
+
+Here is the full code for the visualisation tool: 
+
+```{r, eval = FALSE}
+# Load necessary libraries
+library(shiny)
+library(plotly)
+library(DT)
+library(bslib)
+
+# UI Definition
+ui <- fluidPage(
+    theme = bs_theme(
+        bootswatch = "flatly",
+        primary = "#0056b3",
+        secondary = "#FF5733"
+    ),
+    
+    titlePanel(
+        tags$h1("Interactive Bollinger Bands Simulation", style = "text-align: center; color: #0056b3;")
+    ),
+    
+    sidebarLayout(
+        sidebarPanel(
+            tags$h4("Configuration", style = "color: #FF5733;"),
+            selectizeInput(
+                inputId = "ticker",
+                label = "Select Ticker:",
+                choices = NULL,
+                options = list(
+                    placeholder = "Search or select a ticker...",
+                    maxOptions = 503
+                )
+            ),
+            dateRangeInput("date_range", "Select Date Range:", start = "2010-01-01", end = Sys.Date()),
+            numericInput("initial_capital", "Initial Capital (£):", value = 1e7, min = 1e4, step = 1e6),
+            numericInput("transaction_cost", "Transaction Cost (%):", value = 0, min = 0, max = 100, step = 0.1),
+            numericInput("position_size", "Position Size (% of capital):", value = 10, min = 1, max = 100, step = 1),
+            actionButton("update", "Update", class = "btn-primary btn-lg"),
+            width = 3
+        ),
+        
+        mainPanel(
+            tabsetPanel(
+                tabPanel(
+                    "Bar Chart",
+                    tags$h3("Signal Proportions (BUY/SELL)", style = "text-align: center;"),
+                    plotlyOutput("bar_chart", height = "400px")
+                ),
+                tabPanel(
+                    "Scatter Plot",
+                    tags$h3("Price with Bollinger Bands and Breaches", style = "text-align: center;"),
+                    plotlyOutput("scatter_plot", height = "400px")
+                ),
+                tabPanel(
+                    "Line Plot",
+                    tags$h3("Cumulative Profit (£)", style = "text-align: center;"),
+                    plotlyOutput("line_plot", height = "400px")
+                ),
+                tabPanel(
+                    "Signal Table",
+                    tags$h3("Detailed Signal Data", style = "text-align: center;"),
+                    DTOutput("signals_table")
+                )
+            )
+        )
+    )
+)
+
+# Server Definition
+server <- function(input, output, session) {
+    # Load tickers directly from ticker_full (character vector)
+    observe({
+        req(ticker_full)
+        if (!is.character(ticker_full)) {
+            showNotification("ticker_full should be a character vector.", type = "error")
+            return()
+        }
+        
+        # Update the ticker dropdown
+        updateSelectizeInput(session, "ticker", choices = ticker_full, server = TRUE)
+    })
+    
+    # Reactive data based on user inputs
+    filtered_data <- reactive({
+        req(input$ticker, input$date_range, signals_list)
+        
+        # Fetch data for the selected ticker
+        data <- signals_list[[input$ticker]]
+        
+        # Check if the dataset is empty
+        if (is.null(data) || nrow(data) == 0) {
+            showNotification("The selected ticker data is empty or unavailable.", type = "error")
+            return(NULL)
+        }
+        
+        # Generate Date column if missing
+        if (!"Date" %in% names(data)) {
+            data$Date <- seq.Date(from = as.Date("2010-01-01"), by = "day", length.out = nrow(data))
+        }
+        
+        # Convert the Date column to Date type
+        data$Date <- as.Date(data$Date, format = "%Y-%m-%d")
+        
+        # Filter data by date range
+        data <- subset(data, Date >= input$date_range[1] & Date <= input$date_range[2])
+        
+        # Remove rows with missing data
+        data <- na.omit(data)
+        
+        if (nrow(data) < 1) {
+            showNotification("No data available for the selected date range.", type = "error")
+            return(NULL)
+        }
+        
+        return(data)
+    })
+    
+    # Calculate Cumulative Profit Iteratively
+    cumulative_profit <- reactive({
+        req(filtered_data())
+        data <- filtered_data()
+        initial_capital <- input$initial_capital
+        transaction_cost <- input$transaction_cost / 100
+        position_size <- input$position_size / 100
+        
+        # Add a new column for cumulative profit
+        data$CumulativeProfit <- 0
+        capital <- initial_capital
+        
+        for (i in seq_len(nrow(data))) {
+            if (data$Signal[i] == "BUY") {
+                # Calculate the cost of the trade
+                trade_value <- capital * position_size
+                cost <- trade_value * transaction_cost
+                capital <- capital - cost
+            } else if (data$Signal[i] == "SELL") {
+                # Simulate a profit/loss on the trade
+                if (i > 1) {
+                    trade_value <- capital * position_size
+                    cost <- trade_value * transaction_cost
+                    profit <- (data$Price[i] - data$Price[i - 1]) * trade_value / data$Price[i - 1]
+                    capital <- capital + profit - cost
+                }
+            }
+            # Update cumulative profit
+            data$CumulativeProfit[i] <- capital - initial_capital
+        }
+        
+        return(data)
+    })
+    
+    # Bar Chart for Signal Proportions
+    output$bar_chart <- renderPlotly({
+        req(filtered_data())
+        data <- filtered_data()
+        signal_counts <- table(data$Signal[data$Signal %in% c("BUY", "SELL")])
+        
+        plot_ly(
+            x = names(signal_counts),
+            y = as.numeric(signal_counts),
+            type = "bar",
+            marker = list(color = c("#1abc9c", "#e74c3c"))
+        ) %>% layout(
+            title = paste("Signal Proportions (BUY/SELL) for", input$ticker),
+            xaxis = list(title = "Signal"),
+            yaxis = list(title = "Frequency")
+        )
+    })
+    
+    # Scatter Plot with Bollinger Bands
+    output$scatter_plot <- renderPlotly({
+        req(filtered_data())
+        data <- filtered_data()
+        
+        plot_ly(data, x = ~Date) %>%
+            add_lines(y = ~Price, name = "Price", line = list(color = "blue")) %>%
+            add_lines(y = ~BB_Upper, name = "BB Upper", line = list(color = "red", dash = "dash")) %>%
+            add_lines(y = ~BB_Lower, name = "BB Lower", line = list(color = "green", dash = "dash")) %>%
+            add_markers(data = subset(data, Signal == "BUY"), x = ~Date, y = ~Price, name = "BUY", marker = list(color = "green", size = 8)) %>%
+            add_markers(data = subset(data, Signal == "SELL"), x = ~Date, y = ~Price, name = "SELL", marker = list(color = "red", size = 8)) %>%
+            layout(
+                title = paste("Bollinger Bands for", input$ticker),
+                xaxis = list(title = "Date"),
+                yaxis = list(title = "Price")
+            )
+    })
+    
+    # Line Plot for Cumulative Profit
+    output$line_plot <- renderPlotly({
+        req(cumulative_profit())
+        data <- cumulative_profit()
+        
+        plot_ly(data, x = ~Date, y = ~CumulativeProfit, type = "scatter", mode = "lines") %>%
+            layout(
+                title = paste("Cumulative Profit (£) for", input$ticker),
+                xaxis = list(title = "Date"),
+                yaxis = list(title = "Cumulative Profit (£)")
+            )
+    })
+    
+    # Signal Table
+    output$signals_table <- renderDT({
+        req(filtered_data())
+        datatable(filtered_data(), options = list(pageLength = 10, autoWidth = TRUE))
+    })
+}
+
+# Run the application
+shinyApp(ui = ui, server = server)
+```
+
+## AAPL Financial Statements
+
+Please see the full code here: 
+
+```{r, eval = FALSE}
+# Install and load required packages
+if (!require("httr")) install.packages("httr")
+if (!require("jsonlite")) install.packages("jsonlite")
+if (!require("openxlsx")) install.packages("openxlsx")
+
+library(httr)
+library(jsonlite)
+library(openxlsx)
+
+# Set your Alpha Vantage API key
+api_key <- "8NIAD65MWQFINSTH"
+symbol <- "AAPL"
+
+# Define API URLs
+url_income <- paste0("https://www.alphavantage.co/query?function=INCOME_STATEMENT&symbol=", symbol, "&apikey=", api_key)
+url_balance <- paste0("https://www.alphavantage.co/query?function=BALANCE_SHEET&symbol=", symbol, "&apikey=", api_key)
+url_cash_flow <- paste0("https://www.alphavantage.co/query?function=CASH_FLOW&symbol=", symbol, "&apikey=", api_key)
+
+# Fetch data
+income_statement <- fromJSON(content(GET(url_income), as = "text"))
+balance_sheet <- fromJSON(content(GET(url_balance), as = "text"))
+cash_flow <- fromJSON(content(GET(url_cash_flow), as = "text"))
+
+# Extract relevant data from API responses
+income_statement_data <- as.data.frame(income_statement$annualReports)
+balance_sheet_data <- as.data.frame(balance_sheet$annualReports)
+cash_flow_data <- as.data.frame(cash_flow$annualReports)
+
+# Create Excel workbook
+wb <- createWorkbook()
+
+# Add sheets and write data
+addWorksheet(wb, "Income Statement")
+writeData(wb, "Income Statement", income_statement_data)
+
+addWorksheet(wb, "Balance Sheet")
+writeData(wb, "Balance Sheet", balance_sheet_data)
+
+addWorksheet(wb, "Cash Flow Statement")
+writeData(wb, "Cash Flow Statement", cash_flow_data)
+
+# Define the file path for Downloads folder
+downloads_path <- file.path(Sys.getenv("USERPROFILE"), "Downloads", "financial_statements.xlsx")
+
+# Save the Excel file in the Downloads folder
+saveWorkbook(wb, file = downloads_path, overwrite = TRUE)
+
+cat("Financial statements saved to your Downloads folder as 'financial_statements.xlsx'.\n")
+
+# Install and load required packages
+if (!require("readxl")) install.packages("readxl")
+if (!require("dplyr")) install.packages("dplyr")
+
+library(readxl)
+library(dplyr)
+
+# Define the file path
+file_path <- "financial_statements.xlsx"
+
+# Sheet names that correspond to the statements
+sheet_income <- "Income Statement"
+sheet_balance <- "Balance Sheet"
+sheet_cashflow <- "Cash Flow Statement"
+
+# Function to clean and extract the last 3 years
+clean_statement <- function(sheet_name, file_path) {
+  # Read the sheet
+  data <- read_excel(file_path, sheet = sheet_name)
+  
+  # Check if the fiscalDateEnding column exists and clean the data
+  if ("fiscalDateEnding" %in% colnames(data)) {
+    cleaned_data <- data %>%
+      mutate(fiscalDateEnding = as.Date(fiscalDateEnding)) %>%  # Convert to Date
+      arrange(desc(fiscalDateEnding)) %>%  # Sort by date
+      slice(1:3)  # Select the last 3 years
+    return(cleaned_data)
+  } else {
+    stop(paste("fiscalDateEnding column not found in", sheet_name))
+  }
+}
+
+# Clean each statement
+income_statement_cleaned <- clean_statement(sheet_income, file_path)
+balance_sheet_cleaned <- clean_statement(sheet_balance, file_path)
+cash_flow_cleaned <- clean_statement(sheet_cashflow, file_path)
+
+# Display the cleaned tables
+print("Income Statement (Last 3 Years):")
+print(income_statement_cleaned)
+
+print("Balance Sheet (Last 3 Years):")
+print(balance_sheet_cleaned)
+
+print("Cash Flow Statement (Last 3 Years):")
+print(cash_flow_cleaned)
+```
+
+## Reflection
+
+Regarding the position size, I could've allowed for heterogeneity between buy and sell trades. To further add interactivity and customisability, I could've allowed the user to backtest an entire portfolio rather than a singular stock. 
