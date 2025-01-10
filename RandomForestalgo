@@ -1,0 +1,229 @@
+# Load necessary libraries
+library(randomForest)
+library(caret)
+library(tidyverse)
+library(lubridate)
+library(doParallel)
+library(iml)        # For SHAP, PDP, ICE
+library(forecast)   # For autocorrelation diagnostics
+library(PerformanceAnalytics)  # For Sharpe ratio
+library(zoo)        # For forward filling NA values
+
+# Step 1: Extract AAPL data from signals_list
+cat("Step 1: Extracting AAPL data...\n")
+tryCatch({
+  aapl_data <- signals_list[["AAPL US Equity"]]
+}, error = function(e) {
+  stop("Error in Step 1: Failed to extract AAPL data.\n", e$message)
+})
+
+# Step 2: Ensure Date is in Date format and data is sorted
+cat("Step 2: Formatting and sorting data...\n")
+tryCatch({
+  aapl_data <- aapl_data %>% 
+    mutate(Date = as.Date(Date)) %>% 
+    arrange(Date)
+}, error = function(e) {
+  stop("Error in Step 2: Formatting and sorting failed.\n", e$message)
+})
+
+# Step 3: Add external predictors dynamically (only VIX)
+cat("Step 3: Adding VIX data...\n")
+tryCatch({
+  # Check if vix_data is already loaded
+  if (!exists("vix_data")) {
+    stop("vix_data is not loaded. Please load the VIX data into the environment before running the script.")
+  }
+
+  # Check structure of vix_data
+  str(vix_data)
+
+  # Rename 'VIX.Adjusted' to 'VIX' if it exists
+  if ("VIX.Adjusted" %in% colnames(vix_data)) {
+    colnames(vix_data)[colnames(vix_data) == "VIX.Adjusted"] <- "VIX"
+  }
+
+  # Ensure 'VIX' is now a column in vix_data
+  if (!"VIX" %in% colnames(vix_data)) {
+    stop("VIX column is still missing after renaming.")
+  }
+
+  # Convert 'Date' to Date type if it's not already in the correct format
+  vix_data$Date <- as.Date(vix_data$Date)
+
+  # Check if VIX contains any missing values (NA) and remove those rows
+  if (any(is.na(vix_data$VIX))) {
+    warning("VIX data contains NA values. These will be removed from the merge.")
+    # Remove rows where VIX is NA
+    vix_data <- vix_data %>% filter(!is.na(VIX))
+  }
+
+  # Merge VIX data with aapl_data
+  cat("Merging VIX data with aapl_data...\n")
+  aapl_data <- aapl_data %>% 
+    left_join(vix_data, by = "Date")
+
+  # Ensure that the VIX merge is successful
+  if (!"VIX" %in% colnames(aapl_data) || all(is.na(aapl_data$VIX))) {
+    stop("VIX column is missing or contains only NA values after the merge.")
+  }
+
+}, error = function(e) {
+  stop("Error in Step 3: Adding external predictors failed.\n", e$message)
+})
+
+# Step 4: Add required features dynamically
+cat("Step 4: Adding features dynamically...\n")
+tryCatch({
+  # Check if BB_Upper and BB_Lower are populated
+  if (all(is.na(aapl_data$BB_Upper)) || all(is.na(aapl_data$BB_Lower))) {
+    stop("BB_Upper or BB_Lower contains only NA values. Ensure these columns are populated.")
+  }
+  
+  # Handle missing values in BB_Upper or BB_Lower with a creative approach
+  cat("Handling missing BB_Upper and BB_Lower values...\n")
+  
+  # Forward fill the missing values (replace NA with previous non-NA value)
+  aapl_data$BB_Upper <- zoo::na.locf(aapl_data$BB_Upper, na.rm = FALSE)
+  aapl_data$BB_Lower <- zoo::na.locf(aapl_data$BB_Lower, na.rm = FALSE)
+  
+  # Check again if there are any NA values
+  if (any(is.na(aapl_data$BB_Upper)) || any(is.na(aapl_data$BB_Lower))) {
+    warning("Still some missing values in BB_Upper or BB_Lower after forward fill. Proceeding with zero-filling.")
+    # If still NA, replace with zero
+    aapl_data$BB_Upper[is.na(aapl_data$BB_Upper)] <- 0
+    aapl_data$BB_Lower[is.na(aapl_data$BB_Lower)] <- 0
+  }
+  
+  # Now calculate Band_Width and other features
+  aapl_data <- aapl_data %>%
+    mutate(
+      Band_Width = BB_Upper - BB_Lower,              # Band width
+      Proximity_to_Upper = BB_Upper - Price,         # Distance to upper band
+      Proximity_to_Lower = Price - BB_Lower          # Distance to lower band
+    )
+
+  # Drop rows with zero or missing Band_Width
+  aapl_data <- aapl_data %>% filter(Band_Width > 0)
+
+  # Compute additional features
+  aapl_data <- aapl_data %>% 
+    mutate(
+      Band_Width_Lag1 = lag(Band_Width, 1),          # Lagged Band Width
+      Z_Statistic_Lag1 = lag(Z_Statistic, 1),        # Lagged Z_Statistic
+      Interaction_BW_VIX = Band_Width * VIX          # Interaction term: Band Width × VIX
+    ) %>% 
+    drop_na(Band_Width, Proximity_to_Upper, Proximity_to_Lower)
+
+  # Add return variables (1-day, 5-day, and 10-day returns)
+  aapl_data <- aapl_data %>%
+    mutate(
+      return_1d = (lead(Price, 1) - Price) / Price,   # 1-day forward return
+      return_5d = (lead(Price, 5) - Price) / Price,   # 5-day forward return
+      return_10d = (lead(Price, 10) - Price) / Price  # 10-day forward return
+    )
+
+  # Check for missing values in return variables and remove them
+  aapl_data <- aapl_data %>% 
+    filter(!is.na(return_1d), !is.na(return_5d), !is.na(return_10d))
+
+  # Handle missing values in Band_Width_Lag1 or Z_Statistic_Lag1 by removing rows with NAs
+  cat("Handling missing values in Band_Width_Lag1 or Z_Statistic_Lag1...\n")
+  aapl_data <- aapl_data %>%
+    filter(!is.na(Band_Width_Lag1), !is.na(Z_Statistic_Lag1))
+
+}, error = function(e) {
+  stop("Error in Step 4: Feature engineering failed.\n", e$message)
+})
+
+# Step 5: Split the dataset using time-series validation (No overlap)
+cat("Step 5: Splitting dataset into training and testing sets...\n")
+tryCatch({
+  # Ensure 'Date' column is in the correct Date format
+  aapl_data$Date <- as.Date(aapl_data$Date)
+  
+  # Check if 'Date' column conversion was successful
+  if (any(is.na(aapl_data$Date))) {
+    stop("The 'Date' column has missing or invalid values after conversion.")
+  }
+  
+  # Sort data based on Date
+  aapl_data <- aapl_data %>% arrange(Date)
+  
+  # Define the cut-off date for the training data
+  cut_off_date <- "2020-01-01"  # You can modify this to any date you want
+  
+  # Split the data into training and testing sets
+  train_data <- aapl_data %>% filter(Date < as.Date(cut_off_date))
+  test_data <- aapl_data %>% filter(Date >= as.Date(cut_off_date))
+  
+  # Validate the split
+  if (nrow(train_data) == 0 || nrow(test_data) == 0) {
+    stop("Data splitting failed. No data in train or test set.")
+  }
+}, error = function(e) {
+  stop("Error in Step 5: Data splitting failed.\n", e$message)
+})
+
+# Step 6: Set up parallelisation
+cat("Step 6: Setting up parallelisation...\n")
+tryCatch({
+  cl <- makeCluster(detectCores() - 1)  # Use all but one core
+  registerDoParallel(cl)
+}, error = function(e) {
+  stop("Error in Step 6: Parallelisation setup failed.\n", e$message)
+})
+
+# Step 7: Define evaluation metrics (Directional Accuracy, Hit Rate, Sharpe Ratio)
+evaluate_metrics <- function(predictions, actuals, threshold = 0) {
+  directional_accuracy <- mean(sign(predictions) == sign(actuals))  # Match in direction
+  hit_rate <- mean(predictions > threshold & actuals > threshold)  # Correctly predicted positives
+  sharpe_ratio <- SharpeRatio(predictions - actuals, Rf = 0.02 / 252, p = 0.95)  # Risk-free rate
+  list(Directional_Accuracy = directional_accuracy, Hit_Rate = hit_rate, Sharpe_Ratio = sharpe_ratio)
+}
+
+# Step 8: Define residual diagnostics
+diagnose_residuals <- function(model, data, dependent_var) {
+  tryCatch({
+    predictions <- predict(model, data)
+    residuals <- data[[dependent_var]] - predictions
+    acf_res <- acf(residuals, plot = FALSE)
+    dw_stat <- dwtest(residuals ~ lag(residuals, -1))  # Durbin-Watson test
+    list(Residuals = residuals, ACF = acf_res, Durbin_Watson = dw_stat)
+  }, error = function(e) {
+    warning("Residual diagnostics failed: ", e$message)
+    NULL
+  })
+}
+
+# Step 9: Train models and evaluate with new metrics
+train_rf <- function(dependent_var, train_data, test_data) {
+  cat("Training Random Forest for:", dependent_var, "\n")
+  tryCatch({
+    rf_model <- randomForest(
+      as.formula(paste(dependent_var, "~ Band_Width + Proximity_to_Upper + Proximity_to_Lower + VIX +
+                        Band_Width_Lag1 + Z_Statistic_Lag1 + Interaction_BW_VIX")),
+      data = train_data,
+      ntree = 500,
+      mtry = 3,
+      importance = TRUE,
+      do.trace = TRUE
+    )
+    predictions <- predict(rf_model, test_data)
+    actuals <- test_data[[dependent_var]]
+    metrics <- evaluate_metrics(predictions, actuals)
+    residuals <- diagnose_residuals(rf_model, test_data, dependent_var)
+    list(Model = rf_model, Metrics = metrics, Residuals = residuals)
+  }, error = function(e) {
+    warning("Training or evaluation failed for:", dependent_var, "\n", e$message)
+    NULL
+  })
+}
+
+# Step 10: Run models for 1-day, 5-day, and 10-day returns
+results_1d <- train_rf("return_1d", train_data, test_data)
+results_5d <- train_rf("return_5d", train_data, test_data)
+results_10d <- train_rf("return_10d", train_data, test_data)
+
+# Stop the parallel cluster
+stopCluster(cl)
