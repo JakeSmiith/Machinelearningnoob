@@ -29,26 +29,24 @@ tryCatch({
 # Step 3: Add external predictors dynamically (only VIX)
 cat("Step 3: Adding VIX data...\n")
 tryCatch({
-  # Check if vix_data is already loaded
   if (!exists("vix_data")) {
     stop("vix_data is not loaded. Please load the VIX data into the environment before running the script.")
   }
-  
+
   # Rename 'VIX.Adjusted' to 'VIX' if it exists
   if ("VIX.Adjusted" %in% colnames(vix_data)) {
     colnames(vix_data)[colnames(vix_data) == "VIX.Adjusted"] <- "VIX"
   }
-  
+
   # Convert 'Date' to Date type if necessary
   vix_data$Date <- as.Date(vix_data$Date)
-  
+
   # Remove rows with missing VIX values
   vix_data <- vix_data %>% filter(!is.na(VIX))
-  
+
   # Merge VIX data with AAPL data
   cat("Merging VIX data with aapl_data...\n")
-  aapl_data <- aapl_data %>% 
-    left_join(vix_data, by = "Date")
+  aapl_data <- aapl_data %>% left_join(vix_data, by = "Date")
 }, error = function(e) {
   stop("Error in Step 3: Adding external predictors failed.\n", e$message)
 })
@@ -57,21 +55,21 @@ tryCatch({
 cat("Step 4: Adding features dynamically...\n")
 tryCatch({
   # Forward fill missing values in Bollinger Bands
-  aapl_data <- aapl_data %>%
+  aapl_data <- aapl_data %>% 
     mutate(
       BB_Upper = na.locf(BB_Upper, na.rm = FALSE),
       BB_Lower = na.locf(BB_Lower, na.rm = FALSE)
     )
-  
+
   # Replace remaining NA values with 0
-  aapl_data <- aapl_data %>%
+  aapl_data <- aapl_data %>% 
     mutate(
       BB_Upper = ifelse(is.na(BB_Upper), 0, BB_Upper),
       BB_Lower = ifelse(is.na(BB_Lower), 0, BB_Lower)
     )
-  
+
   # Add dynamic features
-  aapl_data <- aapl_data %>%
+  aapl_data <- aapl_data %>% 
     mutate(
       Band_Width = BB_Upper - BB_Lower,
       Proximity_to_Upper = BB_Upper - Price,
@@ -82,7 +80,7 @@ tryCatch({
       return_1d = (lead(Price, 1) - Price) / Price,
       return_5d = (lead(Price, 5) - Price) / Price,
       return_10d = (lead(Price, 10) - Price) / Price
-    ) %>%
+    ) %>% 
     drop_na(Band_Width, Proximity_to_Upper, Proximity_to_Lower, 
             Band_Width_Lag1, Z_Statistic_Lag1, return_1d, return_5d, return_10d)
 }, error = function(e) {
@@ -118,23 +116,27 @@ evaluate_metrics <- function(predictions, actuals, threshold = 0) {
   directional_accuracy <- mean(sign(predictions) == sign(actuals))
   hit_rate <- mean(predictions > threshold & actuals > threshold)
   sharpe_ratio <- SharpeRatio(predictions - actuals, Rf = 0.02 / 252, p = 0.95)
-  list(Directional_Accuracy = directional_accuracy, Hit_Rate = hit_rate, Sharpe_Ratio = sharpe_ratio)
+  
+  return(data.frame(
+    Directional_Accuracy = directional_accuracy,
+    Hit_Rate = hit_rate,
+    Sharpe_Ratio = sharpe_ratio
+  ))
 }
 
 # Step 9: Hyperparameter Tuning with Grid Search using tuneRF
 cat("Step 9: Hyperparameter tuning with tuneRF...\n")
 
-# Perform hyperparameter tuning with tuneRF
 tune_results <- tuneRF(
   x = train_data[, c("Band_Width", "Proximity_to_Upper", "Proximity_to_Lower", "VIX", 
                      "Band_Width_Lag1", "Z_Statistic_Lag1", "Interaction_BW_VIX")],
-  y = train_data$return_1d,                     # Target variable
-  mtryStart = 3,                                # Initial mtry value
-  ntreeTry = 500,                               # Number of trees
-  stepFactor = 1.5,                             # How much to increase mtry at each step
-  improve = 0.01,                               # Minimum improvement required
-  trace = TRUE,                                 # Print progress
-  plot = FALSE                                   # Plot performance (disable)
+  y = train_data$return_1d,                    
+  mtryStart = 3,                                
+  ntreeTry = 500,                               
+  stepFactor = 1.5,                             
+  improve = 0.01,                              
+  trace = TRUE,                                 
+  plot = FALSE                                   
 )
 
 cat("Best mtry from tuning:\n")
@@ -146,9 +148,9 @@ final_rf_model <- randomForest(
   return_1d ~ Band_Width + Proximity_to_Upper + Proximity_to_Lower + VIX +
     Band_Width_Lag1 + Z_Statistic_Lag1 + Interaction_BW_VIX,
   data = train_data,
-  ntree = 500,                                # Fixed number of trees
-  mtry = tune_results[1, "mtry"],             # Optimal mtry from tuning
-  importance = TRUE                           # Importance of features
+  ntree = 500,                               
+  mtry = tune_results[1, "mtry"],             
+  importance = TRUE                           
 )
 
 # Step 11: Evaluate the final model on the test data
@@ -158,19 +160,37 @@ metrics <- evaluate_metrics(predictions, test_data$return_1d)
 cat("Evaluation metrics for final model:\n")
 print(metrics)
 
-# Save the final tuned model
+# Step 12: Save the final tuned model
 cat("Step 12: Saving the final model...\n")
 saveRDS(final_rf_model, "final_rf_tuned_model.rds")
 
 # Step 13: Save plot to PNG with 10000x10000 resolution
 cat("Step 13: Saving the plot...\n")
-png("evaluation_metrics_plot.png", width = 10000, height = 10000)  # Save plot as PNG
+png("evaluation_metrics_plot.png", width = 3000, height = 3000)  
 
-# Plot the evaluation metrics
-par(mfrow = c(1, 3), mar = c(5, 5, 2, 1))  # Adjusted margins
-plot(metrics$Directional_Accuracy, main = "Directional Accuracy", col = "blue", pch = 16)
-plot(metrics$Hit_Rate, main = "Hit Rate", col = "green", pch = 16)
-plot(metrics$Sharpe_Ratio, main = "Sharpe Ratio", col = "red", pch = 16)
+if (is.numeric(metrics$Directional_Accuracy) && 
+    is.numeric(metrics$Hit_Rate) && 
+    is.numeric(metrics$Sharpe_Ratio)) {
+    
+    par(mfrow = c(1, 3), mar = c(5, 5, 2, 1))  
+    plot(metrics$Directional_Accuracy, main = "Directional Accuracy", col = "blue", pch = 16)
+    plot(metrics$Hit_Rate, main = "Hit Rate", col = "green", pch = 16)
+    plot(metrics$Sharpe_Ratio, main = "Sharpe Ratio", col = "red", pch = 16)
+} else {
+    cat("Error: Metrics are not numeric, cannot plot.\n")
+}
+
+# Close the PNG device
+dev.off()
+
+# Step 14: Plot Predictions vs Actuals
+cat("Step 14: Plotting Predictions vs Actuals...\n")
+png("predictions_vs_actuals.png", width = 3000, height = 3000)
+plot(predictions, test_data$return_1d, 
+     main = "Predictions vs Actuals",
+     xlab = "Predicted Returns", ylab = "Actual Returns",
+     col = "blue", pch = 16)
+abline(0, 1, col = "red")
 
 # Close the PNG device
 dev.off()
