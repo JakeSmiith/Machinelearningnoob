@@ -11,90 +11,90 @@ library(zoo)        # For forward filling NA values
 # Step 1: Extract AAPL data from signals_list
 cat("Step 1: Extracting AAPL data...\n")
 tryCatch({
-  aapl_data <- signals_list[["AAPL US Equity"]]
+    aapl_data <- signals_list[["AAPL US Equity"]]
 }, error = function(e) {
-  stop("Error in Step 1: Failed to extract AAPL data.\n", e$message)
+    stop("Error in Step 1: Failed to extract AAPL data.\n", e$message)
 })
 
 # Step 2: Ensure Date is in Date format and data is sorted
 cat("Step 2: Formatting and sorting data...\n")
 tryCatch({
-  aapl_data <- aapl_data %>% 
-    mutate(Date = as.Date(Date)) %>% 
-    arrange(Date)
+    aapl_data <- aapl_data %>% 
+        mutate(Date = as.Date(Date)) %>% 
+        arrange(Date)
 }, error = function(e) {
-  stop("Error in Step 2: Formatting and sorting failed.\n", e$message)
+    stop("Error in Step 2: Formatting and sorting failed.\n", e$message)
 })
 
 # Step 3: Add external predictors dynamically (only VIX)
 cat("Step 3: Adding VIX data...\n")
 tryCatch({
-  if (!exists("vix_data")) {
-    stop("vix_data is not loaded. Please load the VIX data into the environment before running the script.")
-  }
-
-  # Rename 'VIX.Adjusted' to 'VIX' if it exists
-  if ("VIX.Adjusted" %in% colnames(vix_data)) {
-    colnames(vix_data)[colnames(vix_data) == "VIX.Adjusted"] <- "VIX"
-  }
-
-  # Convert 'Date' to Date type if necessary
-  vix_data$Date <- as.Date(vix_data$Date)
-
-  # Remove rows with missing VIX values
-  vix_data <- vix_data %>% filter(!is.na(VIX))
-
-  # Merge VIX data with AAPL data
-  cat("Merging VIX data with aapl_data...\n")
-  aapl_data <- aapl_data %>% left_join(vix_data, by = "Date")
+    if (!exists("vix_data")) {
+        stop("vix_data is not loaded. Please load the VIX data into the environment before running the script.")
+    }
+    
+    # Rename 'VIX.Adjusted' to 'VIX' if it exists
+    if ("VIX.Adjusted" %in% colnames(vix_data)) {
+        colnames(vix_data)[colnames(vix_data) == "VIX.Adjusted"] <- "VIX"
+    }
+    
+    # Convert 'Date' to Date type if necessary
+    vix_data$Date <- as.Date(vix_data$Date)
+    
+    # Remove rows with missing VIX values
+    vix_data <- vix_data %>% filter(!is.na(VIX))
+    
+    # Merge VIX data with AAPL data
+    cat("Merging VIX data with aapl_data...\n")
+    aapl_data <- aapl_data %>% left_join(vix_data, by = "Date")
 }, error = function(e) {
-  stop("Error in Step 3: Adding external predictors failed.\n", e$message)
+    stop("Error in Step 3: Adding external predictors failed.\n", e$message)
 })
 
 # Step 4: Add required features dynamically
 cat("Step 4: Adding features dynamically...\n")
 tryCatch({
-  # Forward fill missing values in Bollinger Bands
-  aapl_data <- aapl_data %>% 
-    mutate(
-      BB_Upper = na.locf(BB_Upper, na.rm = FALSE),
-      BB_Lower = na.locf(BB_Lower, na.rm = FALSE)
-    )
-
-  # Replace remaining NA values with 0
-  aapl_data <- aapl_data %>% 
-    mutate(
-      BB_Upper = ifelse(is.na(BB_Upper), 0, BB_Upper),
-      BB_Lower = ifelse(is.na(BB_Lower), 0, BB_Lower)
-    )
-
-  # Add dynamic features
-  aapl_data <- aapl_data %>% 
-    mutate(
-      Band_Width = BB_Upper - BB_Lower,
-      Proximity_to_Upper = BB_Upper - Price,
-      Proximity_to_Lower = Price - BB_Lower,
-      Band_Width_Lag1 = lag(Band_Width, 1),
-      Z_Statistic_Lag1 = lag(Z_Statistic, 1),
-      Interaction_BW_VIX = Band_Width * VIX,
-      return_1d = (lead(Price, 1) - Price) / Price,
-      return_5d = (lead(Price, 5) - Price) / Price,
-      return_10d = (lead(Price, 10) - Price) / Price
-    ) %>% 
-    drop_na(Band_Width, Proximity_to_Upper, Proximity_to_Lower, 
-            Band_Width_Lag1, Z_Statistic_Lag1, return_1d, return_5d, return_10d)
+    # Forward fill missing values in Bollinger Bands
+    aapl_data <- aapl_data %>% 
+        mutate(
+            BB_Upper = na.locf(BB_Upper, na.rm = FALSE),
+            BB_Lower = na.locf(BB_Lower, na.rm = FALSE)
+        )
+    
+    # Replace remaining NA values with 0
+    aapl_data <- aapl_data %>% 
+        mutate(
+            BB_Upper = ifelse(is.na(BB_Upper), 0, BB_Upper),
+            BB_Lower = ifelse(is.na(BB_Lower), 0, BB_Lower)
+        )
+    
+    # Add dynamic features
+    aapl_data <- aapl_data %>% 
+        mutate(
+            Band_Width = BB_Upper - BB_Lower,
+            Proximity_to_Upper = BB_Upper - Price,
+            Proximity_to_Lower = Price - BB_Lower,
+            Band_Width_Lag1 = lag(Band_Width, 1),
+            Z_Statistic_Lag1 = lag(Z_Statistic, 1),
+            Interaction_BW_VIX = Band_Width * VIX,
+            return_1d = (lead(Price, 1) - Price) / Price,
+            return_5d = (lead(Price, 5) - Price) / Price,
+            return_10d = (lead(Price, 10) - Price) / Price
+        ) %>% 
+        drop_na(Band_Width, Proximity_to_Upper, Proximity_to_Lower, 
+                Band_Width_Lag1, Z_Statistic_Lag1, return_1d, return_5d, return_10d)
 }, error = function(e) {
-  stop("Error in Step 4: Feature engineering failed.\n", e$message)
+    stop("Error in Step 4: Feature engineering failed.\n", e$message)
 })
 
 # Step 5: Split the dataset using time-series validation
 cat("Step 5: Splitting dataset into training and testing sets...\n")
 tryCatch({
-  cut_off_date <- "2020-01-01"  # Define split date
-  train_data <- aapl_data %>% filter(Date < as.Date(cut_off_date))
-  test_data <- aapl_data %>% filter(Date >= as.Date(cut_off_date))
+    cut_off_date <- "2020-01-01"  # Define split date
+    train_data <- aapl_data %>% filter(Date < as.Date(cut_off_date))
+    test_data <- aapl_data %>% filter(Date >= as.Date(cut_off_date))
 }, error = function(e) {
-  stop("Error in Step 5: Data splitting failed.\n", e$message)
+    stop("Error in Step 5: Data splitting failed.\n", e$message)
 })
 
 # Step 6: Set Date column as rownames
@@ -105,38 +105,38 @@ test_data <- test_data %>% column_to_rownames(var = "Date")
 # Step 7: Set up parallelisation
 cat("Step 7: Setting up parallelisation...\n")
 tryCatch({
-  cl <- makeCluster(detectCores() - 1)
-  registerDoParallel(cl)
+    cl <- makeCluster(detectCores() - 1)
+    registerDoParallel(cl)
 }, error = function(e) {
-  stop("Error in Step 7: Parallelisation setup failed.\n", e$message)
+    stop("Error in Step 7: Parallelisation setup failed.\n", e$message)
 })
 
 # Step 8: Define evaluation metrics
 evaluate_metrics <- function(predictions, actuals, threshold = 0) {
-  directional_accuracy <- mean(sign(predictions) == sign(actuals))
-  hit_rate <- mean(predictions > threshold & actuals > threshold)
-  sharpe_ratio <- SharpeRatio(predictions - actuals, Rf = 0.02 / 252, p = 0.95)
-  
-  return(data.frame(
-    Directional_Accuracy = directional_accuracy,
-    Hit_Rate = hit_rate,
-    Sharpe_Ratio = sharpe_ratio
-  ))
+    directional_accuracy <- mean(sign(predictions) == sign(actuals))
+    hit_rate <- mean(predictions > threshold & actuals > threshold)
+    sharpe_ratio <- SharpeRatio(predictions - actuals, Rf = 0.02 / 252, p = 0.95)
+    
+    return(data.frame(
+        Directional_Accuracy = directional_accuracy,
+        Hit_Rate = hit_rate,
+        Sharpe_Ratio = sharpe_ratio
+    ))
 }
 
 # Step 9: Hyperparameter Tuning with Grid Search using tuneRF
 cat("Step 9: Hyperparameter tuning with tuneRF...\n")
 
 tune_results <- tuneRF(
-  x = train_data[, c("Band_Width", "Proximity_to_Upper", "Proximity_to_Lower", "VIX", 
-                     "Band_Width_Lag1", "Z_Statistic_Lag1", "Interaction_BW_VIX")],
-  y = train_data$return_1d,                    
-  mtryStart = 3,                                
-  ntreeTry = 500,                               
-  stepFactor = 1.5,                             
-  improve = 0.01,                              
-  trace = TRUE,                                 
-  plot = FALSE                                   
+    x = train_data[, c("Band_Width", "Proximity_to_Upper", "Proximity_to_Lower", "VIX", 
+                       "Band_Width_Lag1", "Z_Statistic_Lag1", "Interaction_BW_VIX")],
+    y = train_data$return_1d,                    
+    mtryStart = 3,                                
+    ntreeTry = 500,                               
+    stepFactor = 1.5,                             
+    improve = 0.01,                              
+    trace = TRUE,                                 
+    plot = FALSE                                   
 )
 
 cat("Best mtry from tuning:\n")
@@ -145,12 +145,12 @@ print(tune_results)
 # Step 10: Train the final model with optimal parameters
 cat("Step 10: Training final Random Forest model...\n")
 final_rf_model <- randomForest(
-  return_1d ~ Band_Width + Proximity_to_Upper + Proximity_to_Lower + VIX +
-    Band_Width_Lag1 + Z_Statistic_Lag1 + Interaction_BW_VIX,
-  data = train_data,
-  ntree = 500,                               
-  mtry = tune_results[1, "mtry"],             
-  importance = TRUE                           
+    return_1d ~ Band_Width + Proximity_to_Upper + Proximity_to_Lower + VIX +
+        Band_Width_Lag1 + Z_Statistic_Lag1 + Interaction_BW_VIX,
+    data = train_data,
+    ntree = 500,                               
+    mtry = tune_results[1, "mtry"],             
+    importance = TRUE                           
 )
 
 # Step 11: Evaluate the final model on the test data
@@ -164,8 +164,20 @@ print(metrics)
 cat("Step 12: Saving the final model...\n")
 saveRDS(final_rf_model, "final_rf_tuned_model.rds")
 
-# Step 13: Save plot to PNG with 10000x10000 resolution
-cat("Step 13: Saving the plot...\n")
+# Step 13: SHAP Analysis
+cat("Step 13: Running SHAP analysis...\n")
+# Create predictor object
+X_train <- train_data %>% select(Band_Width, Proximity_to_Upper, Proximity_to_Lower, VIX, Band_Width_Lag1, Z_Statistic_Lag1, Interaction_BW_VIX)
+predictor <- Predictor$new(final_rf_model, data = X_train, y = train_data$return_1d)
+
+# Compute SHAP values for the model
+shap_values <- Shapley$new(predictor, x.interest = X_train[1, , drop = FALSE])
+
+# Plot SHAP values
+shap_values$plot()
+
+# Step 14: Save plot to PNG with 10000x10000 resolution
+cat("Step 14: Saving the plot...\n")
 png("evaluation_metrics_plot.png", width = 3000, height = 3000)  
 
 if (is.numeric(metrics$Directional_Accuracy) && 
@@ -183,8 +195,8 @@ if (is.numeric(metrics$Directional_Accuracy) &&
 # Close the PNG device
 dev.off()
 
-# Step 14: Plot Predictions vs Actuals
-cat("Step 14: Plotting Predictions vs Actuals...\n")
+# Step 15: Plot Predictions vs Actuals
+cat("Step 15: Plotting Predictions vs Actuals...\n")
 png("predictions_vs_actuals.png", width = 3000, height = 3000)
 plot(predictions, test_data$return_1d, 
      main = "Predictions vs Actuals",
