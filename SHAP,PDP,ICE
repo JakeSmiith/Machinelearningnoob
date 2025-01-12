@@ -1,0 +1,94 @@
+# Load necessary libraries
+library(randomForest)
+library(tidyverse)
+library(lubridate)
+library(iml)         # For SHAP, PDP, ICE
+library(ggplot2)      # For plotting
+library(openxlsx)     # For saving results
+
+# Assuming that your models and data are already loaded
+# final_rf_model_1d, final_rf_model_5d, final_rf_model_10d, and aapl_data
+
+# Prepare data for SHAP, PDP, and ICE analysis
+# Select relevant features for SHAP, PDP, and ICE analysis
+feature_cols <- c("Band_Width", "Proximity_to_Upper", "Proximity_to_Lower", 
+                  "VIX", "Band_Width_Lag1", "Z_Statistic_Lag1", "Interaction_BW_VIX")
+
+# Create a DataFrame with the features used in the model
+model_data <- aapl_data %>% select(all_of(feature_cols))
+
+# Step 1: SHAP (SHapley Additive exPlanations) for Feature Importance
+cat("Step 1: Calculating SHAP values...\n")
+
+# Create a predictor object for the 1-day model (Repeat for 5-day and 10-day models as necessary)
+predictor_1d <- Predictor$new(final_rf_model_1d, data = model_data, y = aapl_data$return_1d)
+
+# SHAP values for the 1-day model
+shap_1d <- Shapley$new(predictor_1d, x.interest = model_data[1, , drop = FALSE])  # Select an instance (first row here)
+
+# Plot SHAP values for the 1-day model
+shap_1d$plot()
+
+# Step 2: PDP (Partial Dependence Plot) for Features
+cat("Step 2: Plotting Partial Dependence Plots...\n")
+
+# PDP for Band_Width feature (Change to other features as needed)
+pdp_bandwidth <- FeatureEffect$new(predictor_1d, feature = "Band_Width")
+pdp_bandwidth$plot()
+
+# Step 3: ICE (Individual Conditional Expectation) for Features
+cat("Step 3: Plotting ICE (Individual Conditional Expectation)...\n")
+
+# ICE plot for Band_Width feature (You can change the feature for other ICE plots)
+ice_bandwidth <- FeatureEffect$new(predictor_1d, feature = "Band_Width", method = "ice")
+ice_bandwidth$plot()
+
+# Repeat steps for 5-day and 10-day models
+
+# For 5-day model
+predictor_5d <- Predictor$new(final_rf_model_5d, data = model_data, y = aapl_data$return_5d)
+shap_5d <- Shapley$new(predictor_5d, x.interest = model_data[1, , drop = FALSE])
+shap_5d$plot()
+
+pdp_bandwidth_5d <- FeatureEffect$new(predictor_5d, feature = "Band_Width")
+pdp_bandwidth_5d$plot()
+
+ice_bandwidth_5d <- FeatureEffect$new(predictor_5d, feature = "Band_Width", method = "ice")
+ice_bandwidth_5d$plot()
+
+# For 10-day model
+predictor_10d <- Predictor$new(final_rf_model_10d, data = model_data, y = aapl_data$return_10d)
+shap_10d <- Shapley$new(predictor_10d, x.interest = model_data[1, , drop = FALSE])
+shap_10d$plot()
+
+pdp_bandwidth_10d <- FeatureEffect$new(predictor_10d, feature = "Band_Width")
+pdp_bandwidth_10d$plot()
+
+ice_bandwidth_10d <- FeatureEffect$new(predictor_10d, feature = "Band_Width", method = "ice")
+ice_bandwidth_10d$plot()
+
+# Step 4: Save Results to Excel
+cat("Step 4: Saving results to Excel...\n")
+
+# Collect SHAP values and other results
+shap_values_1d <- shap_1d$results
+shap_values_5d <- shap_5d$results
+shap_values_10d <- shap_10d$results
+
+# Save SHAP, PDP, and ICE results to an Excel file
+write.xlsx(list(
+    "SHAP_1D" = shap_values_1d,
+    "SHAP_5D" = shap_values_5d,
+    "SHAP_10D" = shap_values_10d,
+    "PDP_1D" = pdp_bandwidth$results,
+    "PDP_5D" = pdp_bandwidth_5d$results,
+    "PDP_10D" = pdp_bandwidth_10d$results,
+    "ICE_1D" = ice_bandwidth$results,
+    "ICE_5D" = ice_bandwidth_5d$results,
+    "ICE_10D" = ice_bandwidth_10d$results
+), "shap_pdp_ice_results.xlsx")
+
+cat("Results saved to 'shap_pdp_ice_results.xlsx'.\n")
+
+# Step 5: Close parallel cluster if it's still running
+stopCluster(cl)
