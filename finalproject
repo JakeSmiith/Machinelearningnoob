@@ -1,13 +1,33 @@
 ---
-title: 'Evaluating the effectiveness of Bollinger Bands through visualisations.'
-author: "Jake Smith"
+title: "Determining the Efficacy of Bollinger Bands: AAPL Case Study"
+author: "100357048"
 date: "`r Sys.Date()`"
 output:
-  word_document:
-    toc: true
-    toc_depth: 3
-    number_sections: true
+  pdf_document:
+    latex_engine: xelatex
+    highlight: pygments
+    keep_tex: true
+fontsize: 11pt
+geometry: a4paper, margin=1in
+header-includes:
+  - \usepackage{amsmath}
+  - \usepackage{graphicx}
+  - \setkeys{Gin}{width=\linewidth, keepaspectratio}
+  - \usepackage{listings}
+  - \lstset{
+      breaklines=true,
+      breakatwhitespace=true,
+      basicstyle=\ttfamily\small,
+      numbers=left,
+      numberstyle=\tiny,
+      frame=single,
+      tabsize=4
+    }
+  - \usepackage{fvextra}
+  - \DefineVerbatimEnvironment{Highlighting}{Verbatim}{breaklines,commandchars=\\\{\}}
+  - \usepackage{float}
 ---
+
 \newpage
 # Introduction
 
@@ -81,7 +101,7 @@ price_data_wide <- pivot_wider(names_from = ticker, values_from = PX_LAST) %>%
 
 This converts the raw data into a structured dataset suitable for time-series analysis and visualisation.
 
-The final step was exporting the transformed dataset to an Excel file for ease of use and reproducibility. This also allowed for visual inspection and validation of the data before further analysis.
+The final step was exporting the transformed dataset to an Excel file for ease of use and reproducibility, which also allowed for visual inspection and validation of the data before further analysis.
 
 ```{r, eval = FALSE}
 write.xlsx(price_data_wide, "S&P500_Data.xlsx", overwrite = TRUE)
@@ -179,10 +199,11 @@ print("Excel file saved successfully.")
 
 # Visualisations
 
-Once the Excel spreadsheet with adjusted closing prices for each constituent is made, I combined ggplot and plotly to allow the user to see a time-series graph of their desired stock(s). 
+After generating the Excel spreadsheet with adjusted closing prices for all constituents, I integrated ggplot with plotly to enable interactive time-series visualisation for selected stocks.
 
 ## Shiny UI
-This visualisation plots the adjusted closing price of each of the S&P constituents (503 firms) since Janaury 2010 until October 31st, 2024 (the date at which the data was stored). For the remainder of the main body, I focus on the key components driving the visualisation. For comprehensive code, please consult the Appendix.
+
+This visualisation displays the adjusted closing prices of all 503 S&P constituents from January 2010 to October 31, 2024, the dataset's storage date. The main body focuses on the key components driving this visualisation, with the full code available in the Appendix.
 
 ### Interactive plotting with plotly
 
@@ -234,7 +255,7 @@ output$graph <- renderPlotly({
 ```
 ![Shiny UI Screenshot](ShinyUI.png)
 
-The dynamic data exploration feature of plotly allows the user to select specific constituents of the S&P500, enabling tailored exploration of the dataset depending on the firms they are interested in. The comparison feature allows users to overlay multiple data series on the same chart, making it easy to identify relationships between variables. The hover functionality (hoverinfo) provides detailed insights (e.g., date, value) for each data point directly on the graph. Users can extract critical information without needing to consult raw data tables.Dynamic updates based on year selection allow users to focus on specific time periods, making it easier to identify temporal patterns or events affecting the data. The inclusion of colour selectors for primary and comparison columns gives users control over the aesthetics.
+Plotly’s dynamic exploration feature enables users to select specific S&P 500 constituents, tailoring the dataset to their interests. The comparison functionality overlays multiple data series on a single chart, facilitating the identification of relationships between variables. Hover functionality provides detailed insights (e.g., date, value) for each data point, eliminating the need to consult raw data tables. Dynamic year selection allows users to focus on specific time periods, highlighting temporal patterns or events. Additionally, colour selectors for primary and comparison columns enhance user control over chart aesthetics. 
 
 ### User Interface design
 ```{r, eval = FALSE}
@@ -266,8 +287,7 @@ ui <- fluidPage(
     )
 )
 ```
-The structured layout, separating the sidebar panel for inputs and the main panel for outputs ensures a logical workflow. This minimises cognitive load and enhances user focus on the data being visualised. The use of fluidPage makes the UI responsive, ensuring seamless interaction across devices and screen sizes, making the application more versatile.
-
+The structured layout, with a sidebar for inputs and a main panel for outputs, ensures a logical workflow that minimises cognitive load and directs user focus to the visualised data. The responsive design enabled by fluidPage ensures seamless interaction across devices and screen sizes, enhancing the application's versatility.
 
 ### Theme Selection
 ```{r, eval = FALSE}
@@ -289,15 +309,16 @@ filtered_data <- price_data_wide %>%
         }
     }
 ```
-The code filters out rows where the selected column contains missing values (NA), ensuring that only valid data is displayed in the visualisation. This reduces noise and potential errors. Filtering data dynamically based on user input reduces the amount of data processed and displayed in the visualisation, improving responsiveness and performance.
+
+The code dynamically filters out rows with missing values (NA) in the selected column, ensuring only valid data is visualised. This reduces noise, minimises errors, and enhances responsiveness by limiting the amount of processed data based on user input.
 
 ### Comments
 
 AAPL exhibits a long-term bullish trend, reflective of its consistent revenue growth (5 year average YoY growth rate of 9% as of 2024, increases to 12% in 2022.) and market leadership in technology (please see Appendix for the scripts I ran to obtain the Excel files to compute the growth rates), leading to elevated valuations determining continued upwards price action. The COVID-19 period saw an accelerated price growth during this period, which is linked to an increased resilience on technology, with heightened demand for AAPL products. Supressed interest rates and global stimulus measures further helped valuations for AAPL.
 
-Reflective of their beta above 1, this graph reinforces their higher volatility compared to other S&P500 constituents, reflecting its sensitivity to market sentiment and the broader macroeconomy. For example, a notable correction in 2022 occured, which coincides with the FED tightening, and prevailing rotation out of growth stocks into value-oriented sectors. 
+With a beta above 1, this graph highlights AAPL’s higher volatility compared to other S&P 500 constituents, underscoring its sensitivity to market sentiment and macroeconomic trends. For instance, the notable correction in 2022 aligned with the Federal Reserve’s tightening measures and a broader rotation from growth to value-oriented sectors
 
-Another interesting area is their product launch cycle. After events are announced, a pre-announcement rally tends to occur (iPhone XS September 2018, iPhone 11 2019, M1 chip MacBooks November 2020), reinforcing the herd behaviour exhibited in  mega-cap stocks. Investors tend to then "sell the news" on launch day, unless significant innovation or unexpected announcements occur, leading to a reversion in its stock price. 
+AAPL’s product launch cycle presents another intriguing pattern. Pre-announcement rallies often occur (e.g., iPhone XS in September 2018, iPhone 11 in 2019, M1 MacBooks in November 2020), reflecting herd behaviour typical of mega-cap stocks. Investors frequently 'sell the news' on launch day, causing price reversion unless significant innovations or unexpected announcements are made.
 
 Therefore, there may be periods of overbuying and overselling, improving the suitability of Bollinger Bands for AAPL. 
 
@@ -373,13 +394,13 @@ server <- function(input, output, session) {
 shinyApp(ui, server)
 ```
 
-```{r, echo=FALSE}
+```{r, echo=FALSE, out.width="75%"}
 knitr::include_graphics("BollingerBandsShiny.png")
 ```
 
 ## Bollinger Bands simulation
 
-The interface is comprised of 3 key sections. The following code visualises the proportion of 'BUY/SELL' signals across all constituents of the S&P500:
+The interface is divided into three key sections. The following code visualises the proportion of 'BUY' and 'SELL' signals across all S&P 500 constituents: 
 
 ```{r, eval = FALSE}
 output$bar_chart <- renderPlotly({
@@ -402,13 +423,13 @@ output$bar_chart <- renderPlotly({
 
 ### Appropriateness of Bollinger Bands for AAPL - Discussion
 
-```{r, echo=FALSE}
+```{r, echo=FALSE, out.width="80%"}
 knitr::include_graphics("Buy-sell signals AAPL.png")
 ```
 
 Firstly, there is a disparity in signal frequency throughout the almost 15-year simulation (262 "SELL" signals opposed to 150 "BUY" signals). The following theories have been proposed as to why this phenomena occurs... Efficient market hypothesis would suggest the frequent sell conditions are attributed to a pattern of overpricing and overbought conditions within the historical data, whereby prices revert to their mean after temporary deviations. However, given the continuous upwards trajectory in AAPL over the last decade, this suggests a trend rather than a purely efficient market (Malkiel, 2003). AAPL's price doesn't show dramatic drops that match the asymmetric volatility hypothesis during most of the time period, however, during the Covid-19 pandeic, there was a notable dip, supporting the hypothesis for periods of market stress. Generally, AAPL's market resilience dampens the theory's overall impact (Bekaert and Wu, 2000). Finally, loss aversion suggests that investors act defensively, prompting disproportionate SELL signals. This theory still struggles to explain the long-term trend. 
 
-Therefore, a key limitation of Bollinger Bands is its performance in trending markets. In a sustained uptrend (for example between 2017 and 2019) the prices consistently breach the upper band, thus not reflecting the actual overbought conditions, failing to consider market resilience or long-term growth. Bollinger Bands merely interprets statistical anomolies. 
+This reveals a  key limitation of Bollinger Bands is their underperformance in trending markets. During sustained uptrends (e.g., 2017–2019), prices consistently breached the upper band without accurately reflecting overbought conditions, ignoring market resilience and long-term growth. Instead, Bollinger Bands primarily interpret statistical anomalies. 
 
 ### Efficacy as a trading strategy
 
@@ -427,11 +448,13 @@ output$line_plot <- renderPlotly({
         )
 })
 ```
-We see a direct visualisation of a line profit which backtests the financial performance of a given stock. The first image represents the default settings, at 0% transaction cost:
 
-```{r, echo=FALSE}
+The visualisation displays a line graph backtesting the financial performance of a given stock. The first image represents the default settings with 0% transaction costs.
+
+```{r, echo=FALSE, out.width="75%"}
 knitr::include_graphics("Cumprofit0.png")
 ```
+
 0% is an important benchmark as it models the theoretical limit of the trading strategy without external distortions. However, in financial markets, the assumption of 0% transaction costs is entirely unrealistic. 
 
 Transaction costs in financial markets are seen as residual losses, which are disaggregated into implicit and explicit costs (Allen, 1991). (Di Maggio et Al, 2020) gives a key distinction between the NASDAQ / NYSE and the LSE, whereby the American exchanges conduct a tiered fee structure based on monthly trading volume, whereas LSE operates on a fixed fee per trade. These fees are generally negligible, although when combined with other elements summate to a larger erosion of trader profitability. (Persaud, 2017) considers Stamp Duty Reserve Tax, relevant to the UK imposition of a 0.5% Stamp Duty on equity purchases on the London Stock Exchange (This doesn't apply to the Alternative Investments Market (AIM)).
@@ -483,22 +506,23 @@ print(annual_volatility)
 knitr::include_graphics("Historicalvolatility.png")
 ```
 
-The daily standard deviation and annualised volatility have remained relatively stable and moderate over the last 15 years, with significant spikes in times of economic turmoil, 2020 and 2022 respectively. Due to its high susceptibility to macroeconomic shocks, the moderate annualised volatility reflects investors compensating for risks associated with holding inventory, although this doesn't exacerbate the observed bid-ask spread. 
+Over the past 15 years, daily standard deviation and annualised volatility have remained relatively stable, with notable spikes during economic turmoil in 2020 and 2022. AAPL's high susceptibility to macroeconomic shocks suggests that moderate annualised volatility reflects investor compensation for holding risks, though it does not significantly impact the observed bid-ask spread.
 
 Trade size is an adjustable parameter within the UI. As capital % increases, at 0% transaction cost, the y axis exponentiates to over 700 million by the end of the simulation. The inverse is seen if transaction costs were 2%. Position size may increase bid-ask spread as the sellers on the order book might not summate to the bigger buy order within the tighter spread. 
 
-```{r, echo=FALSE}
+```{r, echo=FALSE, out.width="75%"}
 knitr::include_graphics("Cumprofit1.png")
 ```
 
-We see that overall trading strategy is very sensitive to transaction costs, condusive of a high-turnover strategy. It's worth mentioning the efficacy of Bollinger Bands layered with another strategy (such as MACD) may improve the profitability of the trading strategy due to reduced turnover. For research to progress further, research should converge on stylised properties that would improve the efficacy of Bollinger Bands.
+The trading strategy is highly sensitive to transaction costs, reflecting its high-turnover nature. Integrating Bollinger Bands with another strategy, such as MACD, could enhance profitability by reducing turnover. Future research should focus on identifying stylised properties to improve the efficacy of Bollinger Bands. 
 
-```{r, echo=FALSE}
+```{r, echo=FALSE, out.width="75%"}
 knitr::include_graphics("Cumprofit2.png")
 ```
+
 # Regression Analysis
 
-To understand Bollinger Bands in greater granularity, a predictive regression analysis, with the future returns modelled as the dependent variable, and the Z-statistic, proximity to the upper and lower bands and band width modelled as independent variables. 
+To gain deeper insights into Bollinger Bands, a predictive regression analysis was conducted, modelling future returns as the dependent variable and using the Z-statistic, proximity to the upper and lower bands, and band width as independent variables.
 
 Random Forest Algorithms are utilised to capture the non-linearity and 'random walk' component of AAPL's stock price. Scripts for determining the optimal number of trees, number of predictors at each split, and minimum size of terminal nodes are computed in the Appendix. 
 
@@ -592,7 +616,7 @@ The training incorporated key technical indicators, macroeconomic predictors (e.
 ## Plots
 The plots are seen below, with predicted returns on the X axis, and actual returns on the Y axis. 
 
-```{r, echo=FALSE}
+```{r, echo=FALSE, out.width="75%"}
 knitr::include_graphics("ActualPredicted.png")
 ```
 
@@ -772,7 +796,7 @@ $$
 The two parameters are:
 
 - **c** – Center  
-- **σ** – Standard Deviation  
+- **$\sigma$** – Standard Deviation  
 
 It’s important to note the parameters “low”, “medium”, “high” take the Triangular membership function.
 
@@ -1512,7 +1536,7 @@ correlation_matrix_data <- reactive({
     cor_matrix
 })
 ```
-```{r, echo=FALSE}
+```{r, echo=FALSE, out.width="75%"}
 knitr::include_graphics("Correlation 2.png")
 ```
 ```{r, echo=FALSE}
@@ -2421,7 +2445,7 @@ stopCluster(cl)
 
 ## Reflection
 
-Regarding the position size, I could've allowed for heterogeneity between buy and sell trades. To further add interactivity and customisability, I could'allowed the user to backtest an entire portfolio rather than a singular stock. 
+Regarding the position size within the cumulative profit simulation, I could've allowed for heterogeneity between buy and sell trades. To further add interactivity and customisability, I could'allowed the user to backtest an entire portfolio rather than a singular stock. 
 
 From an evaluative perspective, I could've definitely added more value through including interaction terms in the independent variables between other indicators like RSI or MACD. This would've compared the pure Bollinger Bands strategy with merged strategies, and computed the difference in trading efficacy between the strategies. 
 
@@ -2440,8 +2464,3 @@ To maximise frugality of the model, I could've highlighted individual coefficien
 When portraying the SHAP, ALE, and ICE values, I could've put the values into data tables (either in the main body or the Appendix) to give additional context to the reader. Due to the constrained wordcount, I only highlighted the most important phenomena.
 
 Finally, to determine the efficacy of the Random Forest Bollinger Bands model, I would include a baseline regression model in the future to be able to discriminate and directly compare between the models. 
-
-
-
-
-
