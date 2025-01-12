@@ -515,12 +515,32 @@ This is a simple way to reset the stock pool and start fresh, streamlining user 
 
 ## Bollinger Bands simulation
 
+The interface is comprised of 3 key sections. The following code visualises the proportion of 'BUY/SELL' signals across all constituents of the S&P500:
+
+```{r, eval = FALSE}
+output$bar_chart <- renderPlotly({
+    req(filtered_data())
+    data <- filtered_data()
+    signal_counts <- table(data$Signal[data$Signal %in% c("BUY", "SELL")])
+    
+    plot_ly(
+        x = names(signal_counts),
+        y = as.numeric(signal_counts),
+        type = "bar",
+        marker = list(color = c("#1abc9c", "#e74c3c"))
+    ) %>% layout(
+        title = paste("Signal Proportions (BUY/SELL) for", input$ticker),
+        xaxis = list(title = "Signal"),
+        yaxis = list(title = "Frequency")
+    )
+})
+```
+
+### Appropriateness of Bollinger Bands for AAPL - Discussion
+
 ```{r, echo=FALSE}
 knitr::include_graphics("Buy-sell signals AAPL.png")
 ```
-(Insert underlying code) 
-
-### Appropriateness of Bollinger Bands for AAPL - Discussion
 
 Firstly, there is a disparity in signal frequency throughout the almost 15-year simulation (262 "SELL" signals opposed to 150 "BUY" signals). The following theories have been proposed as to why this phenomena occurs... Efficient market hypothesis would suggest the frequent sell conditions are attributed to a pattern of overpricing and overbought conditions within the historical data, whereby prices revert to their mean after temporary deviations. However, given the continuous upwards trajectory in AAPL over the last decade, this suggests a trend rather than a purely efficient market (Malkiel, 2003). AAPL's price doesn't show dramatic drops that match the asymmetric volatility hypothesis during most of the time period, however, during the Covid-19 pandeic, there was a notable dip, supporting the hypothesis for periods of market stress. Generally, AAPL's market resilience dampens the theory's overall impact (Bekaert and Wu, 2000). Finally, loss aversion suggests that investors act defensively, prompting disproportionate SELL signals. This theory still struggles to explain the long-term trend. 
 
@@ -528,21 +548,180 @@ Therefore, a key limitation of Bollinger Bands is its performance in trending ma
 
 ### Efficacy as a trading strategy
 
+The following code underpins the succeeding images:
+
+```{r, eval = FALSE}
+output$line_plot <- renderPlotly({
+    req(cumulative_profit())
+    data <- cumulative_profit()
+    
+    plot_ly(data, x = ~Date, y = ~CumulativeProfit, type = "scatter", mode = "lines") %>%
+        layout(
+            title = paste("Cumulative Profit (£) for", input$ticker),
+            xaxis = list(title = "Date"),
+            yaxis = list(title = "Cumulative Profit (£)")
+        )
+})
+```
+We see a direct visualisation of a line profit which backtests the financial performance of a given stock. The first image represents the default settings, at 0% transaction cost:
+
 ```{r, echo=FALSE}
 knitr::include_graphics("Cumprofit0.png")
 ```
+0% is an important benchmark as it models the theoretical limit of the trading strategy without external distortions. However, in financial markets, the assumption of 0% transaction costs is entirely unrealistic. 
+
+Transaction costs in financial markets are seen as residual losses, which are disaggregated into implicit and explicit costs (Allen, 1991). (Di Maggio et Al, 2020) gives a key distinction between the NASDAQ / NYSE and the LSE, whereby the American exchanges conduct a tiered fee structure based on monthly trading volume, whereas LSE operates on a fixed fee per trade. These fees are generally negligible, although when combined with other elements summate to a larger erosion of trader profitability. (Persaud, 2017) considers Stamp Duty Reserve Tax, relevant to the UK imposition of a 0.5% Stamp Duty on equity purchases on the London Stock Exchange (This doesn't apply to the Alternative Investments Market (AIM)).
+
+Implicitly, the bid-ask spread is a key component of transaction costs (Copeland et Al, 1983). (Benston and Hagerman, 1974) maintain the magnitude of the bid-ask spread isn't fixed, rather a determinant of liquidity, volatility, trade size, and market structure. The following scrips were run in R to determine historical volumes traded and historical volatility: 
+
+```{r, eval=FALSE}
+library(quantmod)
+symbol <- "AAPL"
+getSymbols(symbol, src = "yahoo", from = "2010-01-01", to = Sys.Date(), auto.assign = TRUE)
+historical_volumes <- AAPL[, "AAPL.Volume"]
+print(head(historical_volumes))
+print(tail(historical_volumes))
+```
+```{r, echo=FALSE}
+knitr::include_graphics("Historicalvolumes.png")
+```
+
+AAPL has traded in the tens of millions since the financial crisis, indicative of a low bid-ask spread due to an extensive order book. 
+
+```{r, eval=FALSE}
+library(quantmod)
+library(dplyr)
+symbol <- "AAPL"
+getSymbols(symbol, src = "yahoo", from = "2010-01-01", to = Sys.Date(), auto.assign = TRUE)
+
+# Convert data to a data frame for easier handling
+aapl_data <- data.frame(date = index(AAPL), coredata(AAPL))
+
+# Daily returns
+aapl_data <- aapl_data %>%
+    mutate(daily_return = dailyReturn(Cl(AAPL)))
+
+# Grouping
+aapl_data <- aapl_data %>%
+    mutate(year = format(date, "%Y"))
+
+# Compute annualised volatility year by year
+annual_volatility <- aapl_data %>%
+    group_by(year) %>%
+    summarize(
+        std_dev_daily = sd(daily_return, na.rm = TRUE),
+        annualized_volatility = std_dev_daily * sqrt(252)
+    )
+
+print(annual_volatility)
+```
+```{r, echo=FALSE}
+knitr::include_graphics("Historicalvolatility.png")
+```
+
+The daily standard deviation and annualised volatility have remained relatively stable and moderate over the last 15 years, with significant spikes in times of economic turmoil, 2020 and 2022 respectively. Due to its high susceptibility to macroeconomic shocks, the moderate annualised volatility reflects investors compensating for risks associated with holding inventory, although this doesn't exacerbate the observed bid-ask spread. 
+
+Trade size is an adjustable parameter within the UI. As capital % increases, at 0% transaction cost, the y axis exponentiates to over 700 million by the end of the simulation. The inverse is seen if transaction costs were 2%. Position size may increase bid-ask spread as the sellers on the order book might not summate to the bigger buy order within the tighter spread. 
 
 ```{r, echo=FALSE}
 knitr::include_graphics("Cumprofit1.png")
 ```
 
+We see that overall trading strategy is very sensitive to transaction costs, condusive of a high-turnover strategy. It's worth mentioning the efficacy of Bollinger Bands layered with another strategy (such as MACD) may improve the profitability of the trading strategy due to reduced turnover. For research to progress further, research should converge on stylised properties that would improve the efficacy of Bollinger Bands.
+
 ```{r, echo=FALSE}
 knitr::include_graphics("Cumprofit2.png")
 ```
+# Regression Analysis
+
+To understand Bollinger Bands in greater granularity, a predictive regression analysis, with the future returns modelled as the dependent variable, and the Z-statistic, proximity to the upper and lower bands and band width modelled as independent variables. 
+
+Random Forest Algorithms are utilised to capture the non-linearity and 'random walk' component of AAPL's stock price. Scripts for determining the optimal number of trees, number of predictors at each split, and minimum size of terminal nodes are computed in the Appendix. 
+
+Three seperate models are created; 1-day returns as the dependent variable captures short-term market reactions; 5-day market returns captures medium-term efficacy, smoothing out noise, and 10-day market returns capture long-term durability. Please also see the Appendix for the full Random Forest model. 
+
+Mathematically, they are denoted: 
+
+## Econometric Equations for Model Testing
+
+### 1-Day Return Model:
+
+The regression model is estimated for 1-day returns:
+
+\[
+\**text{return\_1d}_t** = \beta_0 + \beta_1 \cdot \text{Band\_Width}_t + \beta_2 \cdot \text{Proximity\_to\_Upper}_t + \beta_3 \cdot \text{Proximity\_to\_Lower}_t + \beta_4 \cdot \text{VIX}_t + \beta_5 \cdot \text{Band\_Width\_Lag1}_t + \beta_6 \cdot \text{Z\_Statistic\_Lag1}_t + \beta_7 \cdot \text{Interaction\_BW\_VIX}_t + \epsilon_t
+\]
+
+Where:
+- \(\text{Band\_Width}_t\) = the difference between the upper and lower Bollinger Bands at time \(t\);
+
+- \(\text{Proximity\_to\_Upper}_t\) = distance of the price from the upper Bollinger Band at time \(t\),
+
+- \(\text{Proximity\_to\_Lower}_t\) = distance of the price from the lower Bollinger Band at time \(t\),
+
+- \(\text{VIX}_t\) = VIX index at time \(t\),
+
+- \(\text{Band\_Width\_Lag1}_t\) = lagged value of Band Width (one time period earlier),
+
+- \(\text{Z\_Statistic\_Lag1}_t\) = lagged value of the Z-Statistic (one time period earlier),
+
+- \(\text{Interaction\_BW\_VIX}_t\) = interaction term between Band Width and VIX at time \(t\),
+
+- \(\epsilon_t\) = error term at time \(t\).
+
+
+### 2. 5-Day Return Model:
+
+\[
+\**text{return\_5d}_t** = \beta_0 + \beta_1 \cdot \text{Band\_Width}_t + \beta_2 \cdot \text{Proximity\_to\_Upper}_t + \beta_3 \cdot \text{Proximity\_to\_Lower}_t + \beta_4 \cdot \text{VIX}_t + \beta_5 \cdot \text{Band\_Width\_Lag1}_t + \beta_6 \cdot \text{Z\_Statistic\_Lag1}_t + \beta_7 \cdot \text{Interaction\_BW\_VIX}_t + \epsilon_t
+\]
+
+### 10-Day Return Model:
+
+\[
+\**text{return\_10d}_t** = \beta_0 + \beta_1 \cdot \text{Band\_Width}_t + \beta_2 \cdot \text{Proximity\_to\_Upper}_t + \beta_3 \cdot \text{Proximity\_to\_Lower}_t + \beta_4 \cdot \text{VIX}_t + \beta_5 \cdot \text{Band\_Width\_Lag1}_t + \beta_6 \cdot \text{Z\_Statistic\_Lag1}_t + \beta_7 \cdot \text{Interaction\_BW\_VIX}_t + \epsilon_t
+\]
+
+These models aim to explain the returns over different time horizons (1-day, 5-day, 10-day) based on a combination of Bollinger Band metrics (width, proximity) and VIX.The lagged variables for Band Width and Z-Statistic allow the model to capture time-series dependencies. The interaction term between Band Width and VIX helps assess if the relationship between Bollinger Bands and returns is moderated by market volatility.
+
+## Plots
+The plots are seen below, with predicted returns on the X axis, and actual returns on the Y axis. 
+
+```{r, echo=FALSE}
+knitr::include_graphics("ActualPredicted.png")
+```
+
+From the images above, the 1-day model has less scatter around the trend line, implying the model captures the daily variations in price more effectively compared to the 5 and 10-day model. With the 5-day model, we begin to see more dispersion. From a theoretical standpoint, stock returns are more likely to be influenced by other external factors not captured in the model such as sentiment and other external factors. Within the 10-day model, the issue of noise and market complexity overwhelmed the Random Forest's ability to capture volatility, indicative of higher uncertainty. 
+
+### SHAP, ALE
+
+Full code for these values are found in the Appendix.  
+
+The magnitude of phi represents the strength of the feature's contribution to the prediction; phi.var represents the variance of the SHAP values across all data points for a particular feature, meaning that a high variance indicates a larger spread on its impact on predictions across observations; the feature value refers to the actual value of the feature for the variable one is examining, contextualising the SHAP value. 
+
+Firstly, band width shows a consistently positive contribution, increasing with the horizon prediction (1-day = 0.0016, 10-day 0.0114), suggesting its growing importance in longer-term forecasts. Band width lagged by a day shows increasing variability with time (1-day: 1.45x10^-5, 10-day:2.3x10^-4), indicating its growing influence but context-dependent effect, supporting volatility clustering theory (Cont, 2007). Proximity_to_lower exhibited positive contributions in all models, reinforcing its role in signaling mean-reversion behaviour. However, the phi values of proximity_to_higher are also all positive (1-day: 7.6x10^-4, 10-day:1.72x10^-3), suggesting AAPL gained momentum in the backtest, rather than reverting to the mean, reinforcing the upwards trend. The phi and phi.var values for VIX remain relatively stable, indicating their consistent impact as a metric on financial markets. Variance magnitude remains low, suggesting low context-dependence around this predictor. 
+
+PDP's reveal how band width influences the target outcome, highlighting non-linearity, aiming to illustrate marginal effects. Accumulated Local Effects (ALE) adjusts for feature correlations, enhancing interpretability. ALE's are also much more computationally efficient, perfect for our larger dataset. Each row computes the .value, representing the predicted impact of a specific band width on returns. The band_width is the feature value, in which the ALE value is computed. Each row corresponds to a range of band width values, and the ALE shows the average effect of the feature in that interval. In the 1-day model, .value initates as positive with low band-width (e.g .0033 at Band_width 0.327), although this gradually decreases. In stable market conditions, the model predicts positive returns, supporting that low volatility supports predictable price trends. In moderate band width for the 1-day model, .value transitions from slightly positive to slightly negative (-.00032 at Band Width 4.3), meaning the positive impact of band width diminishes as volatility increases. .value becomes negative in high band width conditions, and continues to decrease with increasing band width, until it stabilises around Band_width = 25 at -0.0013. In highly volatile markets, Bollinger Band width negatively impacts returns. High volatility reduces predicatability, making short-term returns harder to capture. 
+
+The positive effects become stronger the longer the time-horizon of the model for low band width, however the negative effects appear earlier in the 5 and 10-day models, reflecting the compounding risk of volatility over longer timeframes. Interestingly, the high bandwidth has the most impact in the 5-day model, whereas in the 10-day model, this negative impact stabilises, suggesting extreme volatility has diminishing marginal effects over longer periods. Please see the Appendix for the appropriate code for the Excel file containing the values.  
+
+The following table comments on model performance: 
+
+```{r, echo=FALSE}
+knitr::include_graphics("Evaluation Metrics.png")
+```
+
+Directional accuracy measures the percentage of correct predictions regarding the direction of price movement (up or down). The directional accuracy is 52% for the 1 and 5 day models, whereas it's 47% for the 10 day model, indicative of little predictive power. For comparison, a random guess would have 50%, thus any percentage above 50% indicates some predictive power, albeit not very high. 
+
+The hit rate measures the percentage of predictions where the model’s forecasted return exceeds a specified threshold (set at 0 to signify positive returns). A higher hit rate indicates that the model tends to predict positive returns correctly. As the number is .39 for the 1-day model, but .13 for the 5 and 10 day models respectively, this indicates Bollinger Bands with the random forest algorithm is better at predicting returns in the short-term. 
+
+The Sharpe ratio measures the excess return (over the risk-free rate) per unit of volatility (standard deviation), a key measure of risk-adjusted performance. The 1-day return (.29 Sharpe Ratio) implies the model earns returns above the risk-free rate, adjusted to its volatility, however, a Sharpe ratio under 1 isn't sufficient for an algorithm, due to the poor risk-adjusted return relative to volatility. As the model moves into the 5 and 10 day return horizons, the Sharpe ratio turns negative (.26 and .56 respectively), suggesting a risk-adjusted loss. 
+
+Whilst StDev Sharpe looks at the overall volatility of the Bollinger Bands strategy, the other three metrics provide a comprehensive view of risk. Please see the Appendix. 
 
 # Conclusion
 
-Bollinger Bands serve as an effective tool for determining oscillations in a stationary stock. However, they should not be the sole driver of an algorithmic trading strategy due to the high turnover generated through frequent position changes. The frequency of these position changes entirely erodes cumulative profit at 1.155% for AAPL, which underscores a key tradeoff - The inverse relationship between risk-adjusted returns and turnover from high-frequency trading.  
+Bollinger Bands serve as an effective tool for determining oscillations in a stationary stock. However, they should not be the sole driver of an algorithmic trading strategy due to the high turnover generated through frequent position changes. The frequency of these position changes entirely erodes cumulative profit at 1.155% for AAPL, which underscores a key tradeoff - The inverse relationship between risk-adjusted returns and turnover from high-frequency trading. The longer the model was tested, the greater struggle the model had capturing volatility, calling into question additional model features. Throughout efficacy testing, the 1-day return model consistently performed better than the 5 and 10-day model, indicative of greater immediate predictive power.  Detailed transaction cost modelling would provide a clearer picture to the exact efficacy of AAPL during the sample period. All models struggle to provide returns under more volatile conditions.
 
 # Bibliography
 
@@ -585,6 +764,12 @@ Tetlock, P.C., 2007. Giving content to investor sentiment: The role of media in 
 Malkiel, B.G., 2003. The efficient market hypothesis and its critics. Journal of economic perspectives, 17(1), pp.59-82.
 
 Bekaert, G. and Wu, G., 2000. Asymmetric volatility and risk in equity markets. The review of financial studies, 13(1), pp.1-42.
+
+Allen, D.W., 1991. What are transaction costs?. Rsch. in L. & Econ., 14, p.1.
+
+Copeland, T.E. and Galai, D., 1983. Information effects on the bid‐ask spread. the Journal of Finance, 38(5), pp.1457-1469.
+
+Cont, R., 2007. Volatility clustering in financial markets: empirical facts and agent-based models. In Long memory in economics (pp. 289-309). Berlin, Heidelberg: Springer Berlin Heidelberg.
 
 # Appendix
 
@@ -1676,7 +1861,382 @@ print(balance_sheet_cleaned)
 print("Cash Flow Statement (Last 3 Years):")
 print(cash_flow_cleaned)
 ```
+## Evaluating model performance - Extended risk analysis
+
+Firstly, the VaR Sharpe explores the potential for extreme losses by measuring the worst-case scenario at a given confidence level. The VaR Sharpe value is .26, suggesting that over a 1-day horizon, the model is able to produce returns that more than compensate for its extreme risk. This is a favorable outcome, indicating that the model’s worst-case scenario (tail risk) is managed effectively in the short term. However, in both the 5 and 10 day model, the models have VaR values of -.15 and -.26 respectively, the model is exposed to greater extreme risks that are not compensated by sufficient returns, indicating underperformance.
+
+Whilst VaR provides the maximum potential loss at a given confidence level, Expected Shortfall Sharpe (Conditional VaR) quantifies the average loss in the tail of the distribution beyond the VaR threshold - it gives the expected value of losses if the loss exceeds the VaR threshold. The positive value in the 1-day model suggests the model is generating sufficient returns to offset the risk of extreme losses, making it well-adjusted for downside risk, whereas with both the 5 and 10 day model, they are expected to suffer substantial average losses in the worst-case scenarios, thereby not compensated by returns. 
+
+Finally, SemiSD Sharpe considers only downside risk (negative volatility), providing a more relevant metric for evaluating risk from the perspective of loss aversion. The 1-day model has a semiSD Sharpe value of .31, showing that the model offers solid returns for the downside risk it takes on. For the 5-day model, the sign changes, and the coefficient becomes -.27; the model incurs considerable downside risk that is not compensated by sufficient returns, signaling poor performance over the medium-term horizon. The coefficient decreases to -.56 in the 10-day model, suggesting even worse performance. 
+
+## Full code - Random Forest Bollinger Bands regression model
+
+```{r, eval = FALSE}
+# Load necessary libraries
+library(randomForest)
+library(tidyverse)
+library(lubridate)
+library(doParallel)
+library(iml)        # For SHAP, PDP, ICE
+library(forecast)   # For autocorrelation diagnostics
+library(PerformanceAnalytics)  # For Sharpe ratio
+library(zoo)        # For forward filling NA values
+library(openxlsx)   # For Excel writing
+
+# Step 1: Extract AAPL data from signals_list
+cat("Step 1: Extracting AAPL data...\n")
+tryCatch({
+    aapl_data <- signals_list[["AAPL US Equity"]]
+}, error = function(e) {
+    stop("Error in Step 1: Failed to extract AAPL data.\n", e$message)
+})
+
+# Step 2: Ensure Date is in Date format and data is sorted
+cat("Step 2: Formatting and sorting data...\n")
+tryCatch({
+    aapl_data <- aapl_data %>% 
+        mutate(Date = as.Date(Date)) %>% 
+        arrange(Date)
+}, error = function(e) {
+    stop("Error in Step 2: Formatting and sorting failed.\n", e$message)
+})
+
+# Step 3: Add external predictors dynamically (only VIX)
+cat("Step 3: Adding VIX data...\n")
+tryCatch({
+    if (!exists("vix_data")) {
+        stop("vix_data is not loaded. Please load the VIX data into the environment before running the script.")
+    }
+    
+    # Rename 'VIX.Adjusted' to 'VIX' if it exists
+    if ("VIX.Adjusted" %in% colnames(vix_data)) {
+        colnames(vix_data)[colnames(vix_data) == "VIX.Adjusted"] <- "VIX"
+    }
+    
+    # Convert 'Date' to Date type if necessary
+    vix_data$Date <- as.Date(vix_data$Date)
+    
+    # Remove rows with missing VIX values
+    vix_data <- vix_data %>% filter(!is.na(VIX))
+    
+    # Merge VIX data with AAPL data
+    cat("Merging VIX data with aapl_data...\n")
+    aapl_data <- aapl_data %>% left_join(vix_data, by = "Date")
+}, error = function(e) {
+    stop("Error in Step 3: Adding external predictors failed.\n", e$message)
+})
+
+# Step 4: Add required features dynamically
+cat("Step 4: Adding features dynamically...\n")
+tryCatch({
+    # Forward fill missing values in Bollinger Bands
+    aapl_data <- aapl_data %>% 
+        mutate(
+            BB_Upper = na.locf(BB_Upper, na.rm = FALSE),
+            BB_Lower = na.locf(BB_Lower, na.rm = FALSE)
+        )
+    
+    # Replace remaining NA values with 0
+    aapl_data <- aapl_data %>% 
+        mutate(
+            BB_Upper = ifelse(is.na(BB_Upper), 0, BB_Upper),
+            BB_Lower = ifelse(is.na(BB_Lower), 0, BB_Lower)
+        )
+    
+    # Add dynamic features
+    aapl_data <- aapl_data %>% 
+        mutate(
+            Band_Width = BB_Upper - BB_Lower,
+            Proximity_to_Upper = BB_Upper - Price,
+            Proximity_to_Lower = Price - BB_Lower,
+            Band_Width_Lag1 = lag(Band_Width, 1),
+            Z_Statistic_Lag1 = lag(Z_Statistic, 1),
+            Interaction_BW_VIX = Band_Width * VIX,
+            return_1d = (lead(Price, 1) - Price) / Price,
+            return_5d = (lead(Price, 5) - Price) / Price,
+            return_10d = (lead(Price, 10) - Price) / Price
+        ) %>% 
+        drop_na(Band_Width, Proximity_to_Upper, Proximity_to_Lower, 
+                Band_Width_Lag1, Z_Statistic_Lag1, return_1d, return_5d, return_10d)
+}, error = function(e) {
+    stop("Error in Step 4: Feature engineering failed.\n", e$message)
+})
+
+# Step 5: Split the dataset using time-series validation
+cat("Step 5: Splitting dataset into training and testing sets...\n")
+tryCatch({
+    cut_off_date <- "2020-01-01"  # Define split date
+    train_data <- aapl_data %>% filter(Date < as.Date(cut_off_date))
+    test_data <- aapl_data %>% filter(Date >= as.Date(cut_off_date))
+}, error = function(e) {
+    stop("Error in Step 5: Data splitting failed.\n", e$message)
+})
+
+# Step 6: Set Date column as rownames
+cat("Step 6: Setting Date as rownames for train and test data...\n")
+train_data <- train_data %>% column_to_rownames(var = "Date")
+test_data <- test_data %>% column_to_rownames(var = "Date")
+
+# Step 7: Set up parallelisation
+cat("Step 7: Setting up parallelisation...\n")
+tryCatch({
+    cl <- makeCluster(detectCores() - 1)
+    registerDoParallel(cl)
+}, error = function(e) {
+    stop("Error in Step 7: Parallelisation setup failed.\n", e$message)
+})
+
+# Step 8: Define evaluation metrics
+evaluate_metrics <- function(predictions, actuals, threshold = 0) {
+    directional_accuracy <- mean(sign(predictions) == sign(actuals))
+    hit_rate <- mean(predictions > threshold & actuals > threshold)
+    sharpe_ratio <- SharpeRatio(predictions - actuals, Rf = 0.02 / 252, p = 0.95)
+    
+    return(data.frame(
+        Directional_Accuracy = directional_accuracy,
+        Hit_Rate = hit_rate,
+        Sharpe_Ratio = sharpe_ratio
+    ))
+}
+
+# Step 9: Hyperparameter Tuning with Grid Search using tuneRF for 1-day, 5-day, and 10-day models
+cat("Step 9: Hyperparameter tuning with tuneRF for 1-day, 5-day, and 10-day...\n")
+
+# Hyperparameter tuning for 1-day model
+tune_1d <- tuneRF(
+  x = train_data[, c("Band_Width", "Proximity_to_Upper", "Proximity_to_Lower", "VIX", 
+                     "Band_Width_Lag1", "Z_Statistic_Lag1", "Interaction_BW_VIX")],
+  y = train_data$return_1d,                    
+  mtryStart = 3,                                
+  ntreeTry = 500,                               
+  stepFactor = 1.5,                             
+  improve = 0.01,                              
+  trace = TRUE,                                 
+  plot = FALSE                                   
+)
+
+# Hyperparameter tuning for 5-day model
+tune_5d <- tuneRF(
+  x = train_data[, c("Band_Width", "Proximity_to_Upper", "Proximity_to_Lower", "VIX", 
+                     "Band_Width_Lag1", "Z_Statistic_Lag1", "Interaction_BW_VIX")],
+  y = train_data$return_5d,                    
+  mtryStart = 3,                                
+  ntreeTry = 500,                               
+  stepFactor = 1.5,                             
+  improve = 0.01,                              
+  trace = TRUE,                                 
+  plot = FALSE                                   
+)
+
+# Hyperparameter tuning for 10-day model
+tune_10d <- tuneRF(
+  x = train_data[, c("Band_Width", "Proximity_to_Upper", "Proximity_to_Lower", "VIX", 
+                     "Band_Width_Lag1", "Z_Statistic_Lag1", "Interaction_BW_VIX")],
+  y = train_data$return_10d,                    
+  mtryStart = 3,                                
+  ntreeTry = 500,                               
+  stepFactor = 1.5,                             
+  improve = 0.01,                              
+  trace = TRUE,                                 
+  plot = FALSE                                   
+)
+
+# Step 10: Train final models for each prediction horizon
+final_rf_model_1d <- randomForest(
+    return_1d ~ Band_Width + Proximity_to_Upper + Proximity_to_Lower + VIX +
+        Band_Width_Lag1 + Z_Statistic_Lag1 + Interaction_BW_VIX,
+    data = train_data,
+    ntree = 500,
+    mtry = tune_1d[1, "mtry"],
+    importance = TRUE
+)
+
+final_rf_model_5d <- randomForest(
+    return_5d ~ Band_Width + Proximity_to_Upper + Proximity_to_Lower + VIX +
+        Band_Width_Lag1 + Z_Statistic_Lag1 + Interaction_BW_VIX,
+    data = train_data,
+    ntree = 500,
+    mtry = tune_5d[1, "mtry"],
+    importance = TRUE
+)
+
+final_rf_model_10d <- randomForest(
+    return_10d ~ Band_Width + Proximity_to_Upper + Proximity_to_Lower + VIX +
+        Band_Width_Lag1 + Z_Statistic_Lag1 + Interaction_BW_VIX,
+    data = train_data,
+    ntree = 500,
+    mtry = tune_10d[1, "mtry"],
+    importance = TRUE
+)
+
+# Step 11: Evaluate models and save performance metrics
+metrics_1d <- evaluate_metrics(predict(final_rf_model_1d, test_data), test_data$return_1d)
+metrics_5d <- evaluate_metrics(predict(final_rf_model_5d, test_data), test_data$return_5d)
+metrics_10d <- evaluate_metrics(predict(final_rf_model_10d, test_data), test_data$return_10d)
+
+# Combine metrics into a dataframe
+model_metrics <- bind_rows(
+  data.frame(Model = "1-day", metrics_1d),
+  data.frame(Model = "5-day", metrics_5d),
+  data.frame(Model = "10-day", metrics_10d)
+)
+
+# Save metrics as CSV
+write.csv(model_metrics, "model_performance_metrics.csv", row.names = FALSE)
+
+# Step 12: Save Actual vs Predicted Plots
+png("predictions_vs_actuals_1d.png", width = 3000, height = 3000)
+plot(predict(final_rf_model_1d, test_data), test_data$return_1d, 
+     main = "1-Day Predictions vs Actuals", 
+     xlab = "Predicted Returns", ylab = "Actual Returns", col = "blue", pch = 16)
+abline(0, 1, col = "red")
+dev.off()
+
+png("predictions_vs_actuals_5d.png", width = 3000, height = 3000)
+plot(predict(final_rf_model_5d, test_data), test_data$return_5d, 
+     main = "5-Day Predictions vs Actuals", 
+     xlab = "Predicted Returns", ylab = "Actual Returns", col = "blue", pch = 16)
+abline(0, 1, col = "red")
+dev.off()
+
+png("predictions_vs_actuals_10d.png", width = 3000, height = 3000)
+plot(predict(final_rf_model_10d, test_data), test_data$return_10d, 
+     main = "10-Day Predictions vs Actuals", 
+     xlab = "Predicted Returns", ylab = "Actual Returns", col = "blue", pch = 16)
+abline(0, 1, col = "red")
+dev.off()
+
+# Step 13: Save performance metrics in Excel
+write.xlsx(list("1-day" = metrics_1d, "5-day" = metrics_5d, "10-day" = metrics_10d, "Summary" = model_metrics), 
+           "model_performance_metrics.xlsx")
+
+# Stop the parallel cluster
+stopCluster(cl)
+```
+
+### SHAP, ALE, ICE full code
+
+```{r, eval = FALSE}
+# Load necessary libraries
+library(randomForest)
+library(tidyverse)
+library(lubridate)
+library(iml)         # For SHAP, ALE, ICE
+library(ggplot2)      # For plotting
+library(openxlsx)     # For saving results
+
+# Assuming that your models and data are already loaded
+# final_rf_model_1d, final_rf_model_5d, final_rf_model_10d, and aapl_data
+
+# Select relevant features for SHAP, ALE, and ICE analysis
+feature_cols <- c("Band_Width", "Proximity_to_Upper", "Proximity_to_Lower", 
+                  "VIX", "Band_Width_Lag1", "Z_Statistic_Lag1", "Interaction_BW_VIX")
+
+# Create a DataFrame with the features used in the model
+model_data <- aapl_data %>% select(all_of(feature_cols))
+
+# Step 1: SHAP (SHapley Additive exPlanations) for Feature Importance
+cat("Step 1: Calculating SHAP values...\n")
+
+# Create a predictor object for the 1-day model (Repeat for 5-day and 10-day models as necessary)
+predictor_1d <- Predictor$new(final_rf_model_1d, data = model_data, y = aapl_data$return_1d)
+
+# SHAP values for the 1-day model
+shap_1d <- Shapley$new(predictor_1d, x.interest = model_data[1, , drop = FALSE])  # Select an instance (first row here)
+
+# Plot SHAP values for the 1-day model
+shap_1d$plot()
+
+# Step 2: ALE (Partial Dependence Plot) for Features
+cat("Step 2: Plotting Partial Dependence Plots...\n")
+
+# ALE for Band_Width feature (Change to other features as needed)
+pdp_bandwidth <- FeatureEffect$new(predictor_1d, feature = "Band_Width")
+pdp_bandwidth$plot()
+
+# Step 3: ICE (Individual Conditional Expectation) for Features
+cat("Step 3: Plotting ICE (Individual Conditional Expectation)...\n")
+
+# ICE plot for Band_Width feature (You can change the feature for other ICE plots)
+ice_bandwidth <- FeatureEffect$new(predictor_1d, feature = "Band_Width", method = "ice")
+ice_bandwidth$plot()
+
+# Repeat steps for 5-day and 10-day models
+
+# For 5-day model
+predictor_5d <- Predictor$new(final_rf_model_5d, data = model_data, y = aapl_data$return_5d)
+shap_5d <- Shapley$new(predictor_5d, x.interest = model_data[1, , drop = FALSE])
+shap_5d$plot()
+
+pdp_bandwidth_5d <- FeatureEffect$new(predictor_5d, feature = "Band_Width")
+pdp_bandwidth_5d$plot()
+
+ice_bandwidth_5d <- FeatureEffect$new(predictor_5d, feature = "Band_Width", method = "ice")
+ice_bandwidth_5d$plot()
+
+# For 10-day model
+predictor_10d <- Predictor$new(final_rf_model_10d, data = model_data, y = aapl_data$return_10d)
+shap_10d <- Shapley$new(predictor_10d, x.interest = model_data[1, , drop = FALSE])
+shap_10d$plot()
+
+pdp_bandwidth_10d <- FeatureEffect$new(predictor_10d, feature = "Band_Width")
+pdp_bandwidth_10d$plot()
+
+ice_bandwidth_10d <- FeatureEffect$new(predictor_10d, feature = "Band_Width", method = "ice")
+ice_bandwidth_10d$plot()
+
+# Step 4: Save Results to Excel
+cat("Step 4: Saving results to Excel...\n")
+
+# Collect SHAP values and other results
+shap_values_1d <- shap_1d$results
+shap_values_5d <- shap_5d$results
+shap_values_10d <- shap_10d$results
+
+# Save SHAP, PDP, and ICE results to an Excel file
+write.xlsx(list(
+    "SHAP_1D" = shap_values_1d,
+    "SHAP_5D" = shap_values_5d,
+    "SHAP_10D" = shap_values_10d,
+    "PDP_1D" = pdp_bandwidth$results,
+    "PDP_5D" = pdp_bandwidth_5d$results,
+    "PDP_10D" = pdp_bandwidth_10d$results,
+    "ICE_1D" = ice_bandwidth$results,
+    "ICE_5D" = ice_bandwidth_5d$results,
+    "ICE_10D" = ice_bandwidth_10d$results
+), "shap_pdp_ice_results.xlsx")
+
+cat("Results saved to 'shap_pdp_ice_results.xlsx'.\n")
+
+# Step 5: Close parallel cluster if it's still running
+stopCluster(cl)
+```
+
+
 
 ## Reflection
 
-Regarding the position size, I could've allowed for heterogeneity between buy and sell trades. To further add interactivity and customisability, I could've allowed the user to backtest an entire portfolio rather than a singular stock. 
+Regarding the position size, I could've allowed for heterogeneity between buy and sell trades. To further add interactivity and customisability, I could'allowed the user to backtest an entire portfolio rather than a singular stock. 
+
+From an evaluative perspective, I could've definitely added more value through including interaction terms in the independent variables between other indicators like RSI or MACD. This would've compared the pure Bollinger Bands strategy with merged strategies, and computed the difference in trading efficacy between the strategies. 
+
+During the coding project, I dedicated considerable time to developing and refining my code, but I recognised areas where my approach could have been more efficient. For example, the proliferation of variables occasionally complicated the structure, and certain sections, such as the repeated importation of libraries, could have been consolidated to improve overall functionality 
+
+While leveraging GitHub for version control was invaluable, I underutilised its potential as a resource for reviewing and informing the logical progression of my work. Upon reflection, adopting a more methodical approach to variable management, actively refactoring code for greater efficiency, and systematically consulting prior iterations could have enhanced both the clarity and effectiveness of my project.
+
+I occasionally found myself losing sight of the overall vision. I had a tendency to prioritise building features that I found personally enjoyable, often retrofitting them into the project later rather than ensuring they aligned with the initial objectives. While this approach allowed me to explore creative ideas, it sometimes diverted focus from the project's core purpose. That said, I greatly enjoyed the coding process itself, particularly the problem-solving aspect of debugging, which was both intellectually stimulating and rewarding. Reflecting on this, I see value in balancing creative exploration with a clearer adherence to the project's overarching goals.
+
+Regarding the Random Forest model, I didn't test for multicollinearity between Proximity_to_Upper and Proximity_to_Lower. These features may contain redundant information, which could negatively impact the model's ability to generalise. In future, I'd create a correlation matrix explicitly for model variables, or conduct a multicollinearity check before deciding on my final independent variables. Whilst I used hyperparameter tuning, I think I could've attempted more specific checks such as cross-validation to enhance model robustness. 
+
+When considering the different measures of risk-adjusted returns, I realised I didn't clearly consider or conduct sensitivity analysis on an appropriate confidence level, instead opting for the default (95%) confidence level. In future, running models at the 90%, 95% and 99% confidence level could generate a further level of comments, as coefficients change.
+
+To maximise frugality of the model, I could've highlighted individual coefficients better. I found it challenging, given the Random Forest model doesn't have directly interpretable coefficients. Additionally, when considering the lagged variables, I could've justified using Akaike Information Criterion or Bayesian Information Criterion to determine optimal leg length opposed to lagging the band width to 1.
+
+When portraying the SHAP, ALE, and ICE values, I could've put the values into data tables (either in the main body or the Appendix) to give additional context to the reader. Due to the constrained wordcount, I only highlighted the most important phenomena.
+
+
+
+
+
+
+
