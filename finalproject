@@ -11,13 +11,11 @@ output:
 \newpage
 # Introduction
 
-The use of Bollinger Bands in financial analysis and modelling gained traction throughout the last 30 years as a robust tool for understanding price volatility and identifying trading opportunities. Bollinger Bands, a technical indicator developed by John Bollinger, consist of a moving average with upper and lower bands that adapt dynamically to market volatility(Bollinger, 2001).These bands provide traders with a visual framework to identify periods of relative price strength or weakness, as well as potential breakout or reversion points. In particular, mean reversion strategies, which assume that asset prices tend to revert to their historical average, are often employed alongside Bollinger Bands to capitalise on price fluctuations and market inefficiencies.
+Over the past 30 years, Bollinger Bands have emerged as a widely used tool in financial analysis, offering a robust framework for understanding price volatility and identifying trading opportunities. Developed by (Bollinger,2001), this technical indicator comprises a moving average flanked by dynamically adjusting upper and lower bands, providing a visual mechanism to detect price strength, weakness, and potential breakouts or reversions. Mean reversion strategies, which leverage the tendency of asset prices to revert to their historical averages, are frequently employed alongside Bollinger Bands to exploit price fluctuations and market inefficiencies.
 
-The importance of such strategies lies in their ability to provide actionable insights in a wide range of market conditions. As markets become increasingly influenced by algorithmic trading and high-frequency strategies, understanding price behaviour through indicators like Bollinger Bands becomes essential for identifying profitable opportunities while mitigating risk. Mean reversion strategies complement this by focusing on statistical anomalies, enabling traders and portfolio managers to make data-driven decisions based on the likelihood of price reversion (Lo et al., 2007).
+The relevance of such strategies lies in their adaptability across diverse market conditions. In the context of increasingly algorithmic and high-frequency trading, Bollinger Bands offer a critical lens for interpreting price behavior and uncovering profitable opportunities, while mean reversion strategies enhance decision-making by capitalizing on statistical anomalies (Lo et al., 2007).
 
-This project aims to evaluate the effectiveness of Bollinger Bands as a standalone tool, assessing their effectiveness in different scenarios. I show the user how Bollinger Bands act as a foundation to more complex mean reversion strategies.
-
-As an ancillary objective, this project serves as an interactive financial visualisation tool, aiming to bridge the academia-reality bridge. Some of the capabilities of the Shiny UI include an article scraper, examining causality between either the absolute or logarithmic prices of two stocks, and an article summariser, aiming to reduce the manual intensity of equity research when searching for a stock. Full code will be provided throughout the bulk of the article, and in various appendix sections. 
+This project evaluates the efficacy of Bollinger Bands as a standalone indicator, assessing their performance across varying market scenarios and demonstrating their foundational role in more advanced mean reversion strategies. Additionally, the project includes interactive Shiny-based financial visualisation tools that bridges the gap between academic research and practical application. Features include article scraping, causal analysis between stock price movements, correlation heatmaps, and automated article summarisation to streamline equity research. Full code and detailed explanations are provided throughout the appendix. 
 
 # Literature Review
 
@@ -52,105 +50,42 @@ $$
 
 ## Applications in Financial Markets
 
-The Bollinger Bands mean reversion strategy is widely recognised, yet consensus around the most optimal application hasn’t yet converged. (Chen, Et al, 2018) explores a Bollinger Bands trading strategy based on wavelet analysis, considering returns, drawdowns, and the income-risk ratio. Using the CSI 300 stock index futures as the research subject, they applied wavelet noise reduction to the price data and found that the enhanced Bollinger Bands trading technique offered higher returns and lower risk compared with conventional BB. For more information on the derivation of wavelet noise reduction, please see the Appendix. (Yan, Et al, 2023) analysed returns in the HKSE based on Random Forest and Bollinger Bands. The performance of traditional BB and enhanced BB strategy are compared and concluded that a combination of traditional and enhanced BB generates higher returns than simply investing in stocks. More information around Random Forest can be found in the appendix. (Ravichandra & Hanif, 2015) explores how Bollinger Bands, combined with the RSI generate returns in the options and futures segments of the Indian market. 
+The Bollinger Bands mean reversion strategy is widely recognised, but consensus on its optimal application remains elusive. (Chen et al,2018) explored a Bollinger Bands strategy enhanced with wavelet noise reduction, using the CSI 300 stock index futures, and demonstrated higher returns and lower risk compared to conventional approaches (Appendix A). Similarly, (Yan et al,2023) combined Random Forest with Bollinger Bands in the HKSE, concluding that integrating traditional and enhanced strategies outperforms simple stock investments (Appendix B). (Ravichandra and Hanif, 2015) examined Bollinger Bands alongside the RSI in the Indian options and futures markets, highlighting their synergy.
 
-(Darmawan Et al, 2024) combines fuzzy logic with Bollinger Bands to improve decision-making in times of increased volatility, based off (Chlif Et al, 2023). The implementation of fuzzy logic with Bollinger Bands exhibited a higher level of precision compared with the MACD indicator and traditional BB, highlighting its efficacy in producing trade signals. Please see Appendix C for more information. To encapsulate the previous paragraphs, (Lento Et Al, 2007) evaluated the profitability of BB indicators, and found that after accounting for transaction costs, the traditional BB strategy struggles to outperform a simple buy and hold strategy, however, profitability improves when applied within a contrarian trading framework (Appendix D)
+More recently, (Darmawan et al, 2024), building on (Chlif et al, 2023), integrated fuzzy logic with Bollinger Bands to improve decision-making during periods of heightened volatility. Their results showed greater precision in generating trade signals compared to traditional BB or MACD indicators (Appendix C). Finally, (Lento et al, 2007) assessed the profitability of Bollinger Bands and found that, after accounting for transaction costs, traditional strategies struggle to outperform a buy-and-hold approach. However, profitability improves when used within a contrarian trading framework (Appendix D).
 
 # Approach & Method
 
-I use a combination of data tables, histograms, boxplots, and screenshots from the Shiny UI. 
-
-Although the code is applicable and scalable for all of the S&P500 constituents, the visualisations to show the product of the code are for AAPL. The S&P500 constituents are are pulled using the blpapi package from the Bloomberg Terminal in TPSC1.03. The stock prices are then converted into an Excel file, which is used for the remainder of the project to significantly reduce the number of API calls made, which is time-consuming. 
-
-For detailed information about different constituents of the S&P500, please consult the Appendix. 
+Historical price data for S&P 500 stocks was retrieved using the Bloomberg Terminal API. Since Bloomberg imposes API call limits, I implemented a batch-processing system to optimise retrieval. The data was then reshaped into a wide format, making it suitable for downstream analyses and visualisations.
 
 ```{r, eval = FALSE}
-# Load necessary libraries
-library(Rblpapi)
-library(tidyverse)
-
-# Connect to Bloomberg
-blpConnect()
-
-# Define the full list of S&P 500 tickers in Bloomberg format
-# Assuming `ticker_full` is your predefined list of tickers in "US Equity" format
-
-# Define batch size and split `ticker_full` into batches of 100
+# Define batch size and split tickers into batches
 batch_size <- 100
 ticker_batches <- split(ticker_full, ceiling(seq_along(ticker_full) / batch_size))
 
-# Initialize an empty list to store data for each batch
-all_data <- list()
-
-# Loop through each batch
-for (i in seq_along(ticker_batches)) {
-    batch <- ticker_batches[[i]]
-    batch_data <- list()  # Temporary list to store each ticker's data within the batch
-    
-    # Loop through each ticker in the current batch
-    for (ticker in batch) {
-        # Fetch the adjusted close prices for the current ticker
-        ticker_data <- bdh(
-            securities = ticker,
-            fields = "PX_LAST",  
-            start.date = start_date,
-            end.date = end_date
-        )
-        
-        # Store the result in the batch_data list with the ticker as the name
-        batch_data[[ticker]] <- ticker_data
-        
-        # Pause for 2 seconds before the next request
-        Sys.sleep(2)
-    }
-    
-    # Combine the batch data and add it to all_data
-    all_data[[i]] <- bind_rows(batch_data, .id = "ticker")
-}
-
-# Combine all batches into a single data frame
-price_data <- bind_rows(all_data)
-
-# Optionally, reshape to have dates as rows and tickers as columns
-price_data_wide <- price_data %>%
-    pivot_wider(names_from = ticker, values_from = PX_LAST) %>%
-    rename(Date = date)
-
-# Display the head of the final combined data
-print(head(price_data_wide))
-
-save.image(file = "Machine_learning_noob.RData")
-summary(price_data_wide)
-dim(price_data_wide)
-
-# Load required library
-library(openxlsx)
-
-# Load the data from your specified file path
-load("C:/Users/jakes/Downloads/Machine_learning_noob.RData")
-
-# Check if 'price_data_wide' is loaded successfully
-if (exists("price_data_wide")) {
-  # Create a new workbook
-  wb <- createWorkbook()
-  
-  # Add a worksheet named "S&P500 Data"
-  addWorksheet(wb, "S&P500 Data")
-  
-  # Write the entire dataframe to the Excel worksheet
-  writeData(wb, "S&P500 Data", price_data_wide, startCol = 1, startRow = 1)
-  
-  # Save the workbook as an Excel file
-  saveWorkbook(wb, "C:/Users/jakes/Downloads/SP500_Data.xlsx", overwrite = TRUE)
-  
-  # Confirm output
-  cat("Excel file saved as 'C:/Users/jakes/Downloads/SP500_Data.xlsx'")
-} else {
-  cat("Error: 'price_data_wide' not found in the loaded RData file.")
-}
+# Fetch data for each batch
+all_data <- lapply(ticker_batches, function(batch) {
+    lapply(batch, function(ticker) {
+        bdh(securities = ticker, fields = "PX_LAST", start_date = start_date, end_date = end_date)
+    })
+})
 ```
 
-The Bollinger Bands are created through a rule-based system, based on predefined thresholds for the Z-statistic. The logic BUY is made if Z is less than -2, SELL if Z is more than 2, and hold if the price is within the bands.
+Once the raw data was collected, it was transformed into a wide format, where each column represents the price series of a specific stock, and rows correspond to dates. This transformation allows for efficient analysis across multiple stocks simultaneously.
+
+```{r, eval = FALSE}
+# Reshape data into wide format
+price_data_wide <- pivot_wider(names_from = ticker, values_from = PX_LAST) %>%
+    rename(Date = date)
+```
+
+This converts the raw data into a structured dataset suitable for time-series analysis and visualisation.
+
+The final step was exporting the transformed dataset to an Excel file for ease of use and reproducibility. This also allowed for visual inspection and validation of the data before further analysis.
+
+```{r, eval = FALSE}
+write.xlsx(price_data_wide, "S&P500_Data.xlsx", overwrite = TRUE)
+```
 
 ## Z-Statistic Formula
 
@@ -442,77 +377,6 @@ shinyApp(ui, server)
 knitr::include_graphics("BollingerBandsShiny.png")
 ```
 
-## Implications for Bollinger Bands - Correlation Matrix
-
-### Reactive correlation matrix calculation
-```{r, eval = FALSE}
-correlation_matrix_data <- reactive({
-    if (length(stock_pool$selected) < 2) {
-        return(NULL)
-    }
-
-    filtered_data <- price_data_wide %>%
-        filter(Date >= input$date_range[1] & Date <= input$date_range[2]) %>%
-        select(c("Date", all_of(stock_pool$selected))) %>%
-        mutate(across(!"Date", ~ (.x / lag(.x) - 1) * 100)) %>%
-        na.omit()
-
-    if (nrow(filtered_data) == 0) {
-        return(NULL)
-    }
-
-    price_changes_matrix <- filtered_data %>%
-        select(-Date)
-
-    cor_matrix <- cor(price_changes_matrix, use = "pairwise.complete.obs")
-
-    order <- seriate(as.dist(1 - cor_matrix), method = "HC")
-    cor_matrix <- cor_matrix[get_order(order), get_order(order)]
-    cor_matrix
-})
-```
-```{r, echo=FALSE}
-knitr::include_graphics("Correlation 2.png")
-```
-```{r, echo=FALSE}
-knitr::include_graphics("Correlation 1.png")
-```
-The matrix calculation dynamically calculates the correlation matrix based on user-selected stocks and date range, ensuring the visualisation is always reflective of the user’s input. The clustering via hierarchical seriation enhances visual interpretability by grouping similar stocks together in the heatmap. 
-
-```{r, eval = FALSE}
-output$correlation_matrix_plot <- renderPlotly({
-    cor_matrix <- correlation_matrix_data()
-
-    cor_melted <- melt(cor_matrix, varnames = c("Var1", "Var2"))
-
-    plot_ly(
-        data = cor_melted,
-        x = ~Var1, y = ~Var2, z = ~value,
-        type = "heatmap",
-        colors = colorRamp(c("red", "white", "blue")),
-        zmin = -1,
-        zmax = 1,
-        hoverinfo = "x+y+z"
-    ) %>%
-    layout(
-        title = "Correlation Matrix of Selected S&P 500 Stocks",
-        xaxis = list(title = "Stocks", tickangle = 45),
-        yaxis = list(title = "Stocks")
-    )
-})
-```
-The hoverinfo feature allows the user to drill down into individual correlation values for more precise insights. The colour gradient (red = negative, blue = positive) makes patterns and outliers immediately recognisable. 
-
-### Clear All Button
-
-```{r, eval = FALSE}
-observeEvent(input$clear_all, {
-    stock_pool$available <- colnames(price_data_wide)[-1]
-    stock_pool$selected <- character(0)
-})
-```
-This is a simple way to reset the stock pool and start fresh, streamlining user interaction. 
-
 ## Bollinger Bands simulation
 
 The interface is comprised of 3 key sections. The following code visualises the proportion of 'BUY/SELL' signals across all constituents of the S&P500:
@@ -649,7 +513,7 @@ Mathematically, they are denoted:
 The regression model is estimated for 1-day returns:
 
 \[
-\**text{return\_1d}_t** = \beta_0 + \beta_1 \cdot \text{Band\_Width}_t + \beta_2 \cdot \text{Proximity\_to\_Upper}_t + \beta_3 \cdot \text{Proximity\_to\_Lower}_t + \beta_4 \cdot \text{VIX}_t + \beta_5 \cdot \text{Band\_Width\_Lag1}_t + \beta_6 \cdot \text{Z\_Statistic\_Lag1}_t + \beta_7 \cdot \text{Interaction\_BW\_VIX}_t + \epsilon_t
+\text{return\_1d}_t = \beta_0 + \beta_1 \cdot \text{Band\_Width}_t + \beta_2 \cdot \text{Proximity\_to\_Upper}_t + \beta_3 \cdot \text{Proximity\_to\_Lower}_t + \beta_4 \cdot \text{VIX}_t + \beta_5 \cdot \text{Band\_Width\_Lag1}_t + \beta_6 \cdot \text{Z\_Statistic\_Lag1}_t + \beta_7 \cdot \text{Interaction\_BW\_VIX}_t + \epsilon_t
 \]
 
 Where:
@@ -670,19 +534,60 @@ Where:
 - \(\epsilon_t\) = error term at time \(t\).
 
 
-### 2. 5-Day Return Model:
+### 5-Day Return Model:
 
 \[
-\**text{return\_5d}_t** = \beta_0 + \beta_1 \cdot \text{Band\_Width}_t + \beta_2 \cdot \text{Proximity\_to\_Upper}_t + \beta_3 \cdot \text{Proximity\_to\_Lower}_t + \beta_4 \cdot \text{VIX}_t + \beta_5 \cdot \text{Band\_Width\_Lag1}_t + \beta_6 \cdot \text{Z\_Statistic\_Lag1}_t + \beta_7 \cdot \text{Interaction\_BW\_VIX}_t + \epsilon_t
+\text{return\_5d}_t = \beta_0 + \beta_1 \cdot \text{Band\_Width}_t + \beta_2 \cdot \text{Proximity\_to\_Upper}_t + \beta_3 \cdot \text{Proximity\_to\_Lower}_t + \beta_4 \cdot \text{VIX}_t + \beta_5 \cdot \text{Band\_Width\_Lag1}_t + \beta_6 \cdot \text{Z\_Statistic\_Lag1}_t + \beta_7 \cdot \text{Interaction\_BW\_VIX}_t + \epsilon_t
 \]
 
 ### 10-Day Return Model:
 
 \[
-\**text{return\_10d}_t** = \beta_0 + \beta_1 \cdot \text{Band\_Width}_t + \beta_2 \cdot \text{Proximity\_to\_Upper}_t + \beta_3 \cdot \text{Proximity\_to\_Lower}_t + \beta_4 \cdot \text{VIX}_t + \beta_5 \cdot \text{Band\_Width\_Lag1}_t + \beta_6 \cdot \text{Z\_Statistic\_Lag1}_t + \beta_7 \cdot \text{Interaction\_BW\_VIX}_t + \epsilon_t
+\text{return\_10d}_t = \beta_0 + \beta_1 \cdot \text{Band\_Width}_t + \beta_2 \cdot \text{Proximity\_to\_Upper}_t + \beta_3 \cdot \text{Proximity\_to\_Lower}_t + \beta_4 \cdot \text{VIX}_t + \beta_5 \cdot \text{Band\_Width\_Lag1}_t + \beta_6 \cdot \text{Z\_Statistic\_Lag1}_t + \beta_7 \cdot \text{Interaction\_BW\_VIX}_t + \epsilon_t
 \]
 
 These models aim to explain the returns over different time horizons (1-day, 5-day, 10-day) based on a combination of Bollinger Band metrics (width, proximity) and VIX.The lagged variables for Band Width and Z-Statistic allow the model to capture time-series dependencies. The interaction term between Band Width and VIX helps assess if the relationship between Bollinger Bands and returns is moderated by market volatility.
+
+### Feature Engineering
+
+```{r, eval = FALSE}
+aapl_data <- aapl_data %>% 
+    mutate(
+        BB_Upper = na.locf(BB_Upper, na.rm = FALSE),
+        BB_Lower = na.locf(BB_Lower, na.rm = FALSE),
+        Band_Width = BB_Upper - BB_Lower,
+        Proximity_to_Upper = BB_Upper - Price,
+        Proximity_to_Lower = Price - BB_Lower,
+        Band_Width_Lag1 = lag(Band_Width, 1),
+        Z_Statistic_Lag1 = lag(Z_Statistic, 1),
+        Interaction_BW_VIX = Band_Width * VIX,
+        return_1d = (lead(Price, 1) - Price) / Price,
+        return_5d = (lead(Price, 5) - Price) / Price,
+        return_10d = (lead(Price, 10) - Price) / Price
+    ) %>% 
+    drop_na(Band_Width, Proximity_to_Upper, Proximity_to_Lower, 
+            Band_Width_Lag1, Z_Statistic_Lag1, return_1d, return_5d, return_10d)
+```
+Key features were meticulously designed to capture distinct elements of market behavior: Band_Width quantified volatility, while Proximity_to_Upper and Proximity_to_Lower were constructed to evaluate price momentum and potential mean-reversion dynamics. Lagged variables, such as Band_Width_Lag1, incorporated the temporal dependence characteristic of volatility clustering. Furthermore, the inclusion of an interaction term (Interaction_BW_VIX) enabled the integration of Bollinger Band signals with market-wide sentiment, as represented by the VIX index. These features allowed for a nuanced exploration of Bollinger Bands across varying temporal horizons (1-day, 5-day, 10-day), aligning technical signals with macroeconomic context, thereby providing a robust foundation for evaluating their predictive validity within a financial framework. 
+
+### Model Training
+
+```{r, eval = FALSE}
+final_rf_model_1d <- randomForest(
+    return_1d ~ Band_Width + Proximity_to_Upper + Proximity_to_Lower + VIX +
+        Band_Width_Lag1 + Z_Statistic_Lag1 + Interaction_BW_VIX,
+    data = train_data,
+    ntree = 500,
+    mtry = tune_1d[1, "mtry"],
+    importance = TRUE
+)
+final_rf_model_5d <- randomForest(...)  # Same structure for `return_5d`
+final_rf_model_10d <- randomForest(...) # Same structure for `return_10d`
+```
+
+Hyperparameter tuning was performed systematically for each horizon using grid search (tuneRF) to optimize key parameters, such as the number of features (mtry) and the number of trees (ntree), ensuring the models were neither overfitted nor underpowered. The inclusion of parallel processing enhanced computational efficiency, enabling the exploration of complex relationships between engineered features and target variables.
+
+The training incorporated key technical indicators, macroeconomic predictors (e.g., VIX), and interaction terms to model non-linear dependencies and volatility clustering. By aligning the training process with financial theory and methodological rigor, the resulting models provided a comprehensive framework to test whether Bollinger Bands possess predictive validity across varying time frames in dynamic financial markets. This methodological rigor ensured the findings were both statistically robust and economically meaningful.
 
 ## Plots
 The plots are seen below, with predicted returns on the X axis, and actual returns on the Y axis. 
@@ -693,7 +598,16 @@ knitr::include_graphics("ActualPredicted.png")
 
 From the images above, the 1-day model has less scatter around the trend line, implying the model captures the daily variations in price more effectively compared to the 5 and 10-day model. With the 5-day model, we begin to see more dispersion. From a theoretical standpoint, stock returns are more likely to be influenced by other external factors not captured in the model such as sentiment and other external factors. Within the 10-day model, the issue of noise and market complexity overwhelmed the Random Forest's ability to capture volatility, indicative of higher uncertainty. 
 
-### SHAP, ALE
+### SHAP, ALE analysis
+
+```{r, eval = FALSE}
+predictor <- Predictor$new(final_rf_model_1d, data = X_train, y = train_data$return_1d)
+shap_values <- Shapley$new(predictor, x.interest = X_train[1, , drop = FALSE])
+shap_values$plot()
+
+pdp <- FeatureEffect$new(predictor, feature = "Band_Width", method = "ale")
+pdp$plot()
+```
 
 Full code for these values are found in the Appendix.  
 
@@ -709,6 +623,22 @@ The following table comments on model performance:
 
 ```{r, echo=FALSE}
 knitr::include_graphics("Evaluation Metrics.png")
+```
+### Evaluation Metrics
+
+```{r, eval = FALSE}
+evaluate_metrics <- function(predictions, actuals, threshold = 0) {
+    directional_accuracy <- mean(sign(predictions) == sign(actuals))
+    hit_rate <- mean(predictions > threshold & actuals > threshold)
+    sharpe_ratio <- SharpeRatio(predictions - actuals, Rf = 0.02 / 252, p = 0.95)
+    return(data.frame(Directional_Accuracy = directional_accuracy,
+                      Hit_Rate = hit_rate,
+                      Sharpe_Ratio = sharpe_ratio))
+}
+
+metrics_1d <- evaluate_metrics(predict(final_rf_model_1d, test_data), test_data$return_1d)
+metrics_5d <- evaluate_metrics(...)  # Same for `return_5d`
+metrics_10d <- evaluate_metrics(...) # Same for `return_10d`
 ```
 
 Directional accuracy measures the percentage of correct predictions regarding the direction of price movement (up or down). The directional accuracy is 52% for the 1 and 5 day models, whereas it's 47% for the 10 day model, indicative of little predictive power. For comparison, a random guess would have 50%, thus any percentage above 50% indicates some predictive power, albeit not very high. 
@@ -857,6 +787,208 @@ A fuzzy inference system processes the fuzzy inputs, applies the rules to determ
 ## Contrarian Framework
 
 In Leyman’s terms, a contrarian approach is whereby investors act opposite to prevailing market trends or sentiment. Popular market opinions lead to mispricing of assets due to herd behaviour and emotional decision-making. An example of an individual who uses the Contrarian framework would be one who buys low and sells high.
+
+## Data Preprocessing
+
+### Macroeconomic Variables
+
+```{r, eval = FALSE}
+#TRAINING/TESTING DATA
+
+#Pulling in daily inflation data - Macroeconomic Data - Inflation-adjusted expectations. 
+#Derived from the difference between nominal Treasury yields and inflation-protected bonds (TIPS)
+library(fredr)
+fredr_set_key("3c907578364cac27c9d8e6b1c7630cb1")
+breakeven_10yr <- fredr_series_observations(
+    series_id = "T10YIE",
+    observation_start = as.Date("2010-01-01"),
+    observation_end = Sys.Date()
+)    
+
+#Risk-free rate - Nominal growth expectations
+treasury_10yr <- fredr_series_observations(
+  series_id = "DGS10",            
+  observation_start = as.Date("2010-01-01"), 
+  observation_end = Sys.Date()     
+)
+
+#U/e
+unemployment_rate <- fredr_series_observations(
+  series_id = "UNRATE",
+  observation_start = as.Date("2010-01-01"),
+  observation_end = Sys.Date()
+)
+
+#Creating daily dataset using interpolation from monthly data
+start_date <- as.Date("2010-01-01")
+end_date <- Sys.Date() 
+daily_dates <- seq(from = start_date, to = end_date, by = "day")
+daily_unemployment <- data.frame(date = daily_dates)
+daily_unemployment <- left_join(daily_unemployment, unemployment_rate, by = "date")
+daily_unemployment <- daily_unemployment %>% select(-c(2, 4, 5))
+daily_unemployment$value <- na.approx(daily_unemployment$value, rule = 2)
+
+
+#Interest rate data - 10 year Treasury yield > Fed funds rate 
+#Rationale - Short-term volatility in Fed funds rate as traders aim to rebalance portfolios. 
+
+#Treasury yield > Breakeven rate: Could indicate expectations for real economic growth without significant inflationary pressures.
+#Treasury yield ≈ Breakeven rate: Suggests that most of the yield is being eroded by inflation expectations, indicating the market anticipates little real growth.
+#Treasury yield < Breakeven rate: This is rare but could signal stagflationary conditions, where inflation expectations outpace growth expectations.
+#Having both variables enables your model to understand not only the level of interest rates and inflation expectations but also their relative dynamics
+
+#Quantmod , volatility index
+getSymbols("^VIX", src = "yahoo", from = "2010-01-01", to = Sys.Date())
+VIX <- VIX[, ncol(VIX)]
+
+#Merging macro-level data (applied to everything)
+VIX <- data.frame(date = index(VIX), coredata(VIX))
+breakeven_10yr$date <- as.Date(breakeven_10yr$date)
+treasury_10yr$date <- as.Date(treasury_10yr$date)
+daily_unemployment$date <- as.Date(daily_unemployment$date)
+VIX$date <- as.Date(VIX$date)
+combined_data <- breakeven_10yr %>%
+  left_join(treasury_10yr, by = "date") %>%
+  left_join(daily_unemployment, by = "date") %>%
+  left_join(VIX, by = "date")
+print(head(combined_data, 10), width = Inf)
+
+#Cleaning table
+combined_data <- combined_data %>%
+  select(-c(2, 4, 5, 6, 8, 9)) %>%
+  rename(
+    breakeven_10yr = value.x,
+    treasury_10yr = value.y,
+    ue_rate = value
+  )
+```
+
+### S&P500 Constituents - adjusted close price data
+
+```{r, eval = FALSE}
+#Bloomberg Terminal (Physical terminal in TPSC1.03)
+install.packages("Rblpapi")
+library(Rblpapi)
+blpConnect()
+
+# Pulling all constituents of S&P500
+sp500_constituents <- bds("SPX Index", "INDX_MEMBERS")
+securities <- sub(" [A-Z]{2}$", "", sp500_constituents$`Member Ticker and Exchange Code`)
+head(securities)
+df <- data.frame(Ticker = securities, stringsAsFactors = FALSE)
+df$ticker_full <- paste(df$Ticker, "Equity", sep = " ")
+bbgid_data <- bdp(securities = df$ticker_full, fields = "ID_BB_GLOBAL")
+df$bbgid <- bbgid_data$ID_BB_GLOBAL
+
+head(df)
+
+#Historical S&P500 data
+start_date <- as.Date("2010-01-01")
+end_date <- Sys.Date()
+fields <- c("PX_OPEN", "PX_HIGH", "PX_LOW", "PX_LAST")
+sp500_ohlc <- bdh(securities = "SPX Index", 
+                  fields = fields, 
+                  start.date = start_date, 
+                  end.date = end_date)
+head(sp500_ohlc)
+
+ticker_full <- paste(securities, "US Equity")
+price_data <- bdh(
+  securities = ticker_full,         
+  fields = "PX_CLOSE",              
+  start.date = start_date,
+  end.date = end_date
+)
+
+
+#test
+test_data <- bdh(
+    securities = "AAPL US Equity",
+    fields = "PX_LAST",
+    start.date = start_date,
+    end.date = end_date
+)
+print(test_data)
+tail(test_data)
+
+
+# Define the full list of S&P 500 tickers in Bloomberg format
+# Assuming `ticker_full` is your predefined list of tickers in "US Equity" format
+
+# Define batch size and split `ticker_full` into batches of 100
+batch_size <- 100
+ticker_batches <- split(ticker_full, ceiling(seq_along(ticker_full) / batch_size))
+
+# Initialize an empty list to store data for each batch
+all_data <- list()
+
+# Loop through each batch
+for (i in seq_along(ticker_batches)) {
+    batch <- ticker_batches[[i]]
+    batch_data <- list()  # Temporary list to store each ticker's data within the batch
+    
+    # Loop through each ticker in the current batch
+    for (ticker in batch) {
+        # Fetch the adjusted close prices for the current ticker
+        ticker_data <- bdh(
+            securities = ticker,
+            fields = "PX_LAST",  
+            start.date = start_date,
+            end.date = end_date
+        )
+        
+        # Store the result in the batch_data list with the ticker as the name
+        batch_data[[ticker]] <- ticker_data
+        
+        # Pause for 2 seconds before the next request
+        Sys.sleep(2)
+    }
+    
+    # Combine the batch data and add it to all_data
+    all_data[[i]] <- bind_rows(batch_data, .id = "ticker")
+}
+
+# Combine all batches into a single data frame
+price_data <- bind_rows(all_data)
+
+# Optionally, reshape to have dates as rows and tickers as columns
+price_data_wide <- price_data %>%
+    pivot_wider(names_from = ticker, values_from = PX_LAST) %>%
+    rename(Date = date)
+
+# Display the head of the final combined data
+print(head(price_data_wide))
+
+save.image(file = "Machine_learning_noob.RData")
+summary(price_data_wide)
+dim(price_data_wide)
+
+# Load required library
+library(openxlsx)
+
+# Load the data from your specified file path
+load("C:/Users/jakes/Downloads/Machine_learning_noob.RData")
+
+# Check if 'price_data_wide' is loaded successfully
+if (exists("price_data_wide")) {
+  # Create a new workbook
+  wb <- createWorkbook()
+  
+  # Add a worksheet named "S&P500 Data"
+  addWorksheet(wb, "S&P500 Data")
+  
+  # Write the entire dataframe to the Excel worksheet
+  writeData(wb, "S&P500 Data", price_data_wide, startCol = 1, startRow = 1)
+  
+  # Save the workbook as an Excel file
+  saveWorkbook(wb, "C:/Users/jakes/Downloads/SP500_Data.xlsx", overwrite = TRUE)
+  
+  # Confirm output
+  cat("Excel file saved as 'C:/Users/jakes/Downloads/SP500_Data.xlsx'")
+} else {
+  cat("Error: 'price_data_wide' not found in the loaded RData file.")
+}
+```
 
 ## Causality Analysis
 
@@ -1352,7 +1484,80 @@ shinyApp(ui, server, options = list(port = 5000))  # Fixed port 5000, change if 
 ```
 
 ## Correlation Matrix
-The full code can be found below: 
+
+### Reactive correlation matrix calculation
+```{r, eval = FALSE}
+correlation_matrix_data <- reactive({
+    if (length(stock_pool$selected) < 2) {
+        return(NULL)
+    }
+
+    filtered_data <- price_data_wide %>%
+        filter(Date >= input$date_range[1] & Date <= input$date_range[2]) %>%
+        select(c("Date", all_of(stock_pool$selected))) %>%
+        mutate(across(!"Date", ~ (.x / lag(.x) - 1) * 100)) %>%
+        na.omit()
+
+    if (nrow(filtered_data) == 0) {
+        return(NULL)
+    }
+
+    price_changes_matrix <- filtered_data %>%
+        select(-Date)
+
+    cor_matrix <- cor(price_changes_matrix, use = "pairwise.complete.obs")
+
+    order <- seriate(as.dist(1 - cor_matrix), method = "HC")
+    cor_matrix <- cor_matrix[get_order(order), get_order(order)]
+    cor_matrix
+})
+```
+```{r, echo=FALSE}
+knitr::include_graphics("Correlation 2.png")
+```
+```{r, echo=FALSE}
+knitr::include_graphics("Correlation 1.png")
+```
+The matrix calculation dynamically calculates the correlation matrix based on user-selected stocks and date range, ensuring the visualisation is always reflective of the user’s input. The clustering via hierarchical seriation enhances visual interpretability by grouping similar stocks together in the heatmap. 
+
+```{r, eval = FALSE}
+output$correlation_matrix_plot <- renderPlotly({
+    cor_matrix <- correlation_matrix_data()
+
+    cor_melted <- melt(cor_matrix, varnames = c("Var1", "Var2"))
+
+    plot_ly(
+        data = cor_melted,
+        x = ~Var1, y = ~Var2, z = ~value,
+        type = "heatmap",
+        colors = colorRamp(c("red", "white", "blue")),
+        zmin = -1,
+        zmax = 1,
+        hoverinfo = "x+y+z"
+    ) %>%
+    layout(
+        title = "Correlation Matrix of Selected S&P 500 Stocks",
+        xaxis = list(title = "Stocks", tickangle = 45),
+        yaxis = list(title = "Stocks")
+    )
+})
+```
+The hoverinfo feature allows the user to drill down into individual correlation values for more precise insights. The colour gradient (red = negative, blue = positive) makes patterns and outliers immediately recognisable. 
+
+### Clear All Button
+
+```{r, eval = FALSE}
+observeEvent(input$clear_all, {
+    stock_pool$available <- colnames(price_data_wide)[-1]
+    stock_pool$selected <- character(0)
+})
+```
+This is a simple way to reset the stock pool and start fresh, streamlining user interaction. 
+
+### Full code
+
+The full code can be found below:
+
 ```{r, eval = FALSE}
 library(shiny)
 library(shinythemes)
@@ -2234,7 +2439,7 @@ To maximise frugality of the model, I could've highlighted individual coefficien
 
 When portraying the SHAP, ALE, and ICE values, I could've put the values into data tables (either in the main body or the Appendix) to give additional context to the reader. Due to the constrained wordcount, I only highlighted the most important phenomena.
 
-
+Finally, to determine the efficacy of the Random Forest Bollinger Bands model, I would include a baseline regression model in the future to be able to discriminate and directly compare between the models. 
 
 
 
