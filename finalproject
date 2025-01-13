@@ -12,6 +12,7 @@ geometry: a4paper, margin=1in
 header-includes:
   - \usepackage{amsmath}
   - \usepackage{graphicx}
+  - \usepackage{breqn} 
   - \setkeys{Gin}{width=\linewidth, keepaspectratio}
   - \usepackage{listings}
   - \lstset{
@@ -536,9 +537,9 @@ Mathematically, they are denoted:
 
 The regression model is estimated for 1-day returns:
 
-\[
+\begin{dmath}
 \text{return\_1d}_t = \beta_0 + \beta_1 \cdot \text{Band\_Width}_t + \beta_2 \cdot \text{Proximity\_to\_Upper}_t + \beta_3 \cdot \text{Proximity\_to\_Lower}_t + \beta_4 \cdot \text{VIX}_t + \beta_5 \cdot \text{Band\_Width\_Lag1}_t + \beta_6 \cdot \text{Z\_Statistic\_Lag1}_t + \beta_7 \cdot \text{Interaction\_BW\_VIX}_t + \epsilon_t
-\]
+\end{dmath}
 
 Where:
 - \(\text{Band\_Width}_t\) = the difference between the upper and lower Bollinger Bands at time \(t\);
@@ -560,15 +561,15 @@ Where:
 
 ### 5-Day Return Model:
 
-\[
+\begin{dmath}
 \text{return\_5d}_t = \beta_0 + \beta_1 \cdot \text{Band\_Width}_t + \beta_2 \cdot \text{Proximity\_to\_Upper}_t + \beta_3 \cdot \text{Proximity\_to\_Lower}_t + \beta_4 \cdot \text{VIX}_t + \beta_5 \cdot \text{Band\_Width\_Lag1}_t + \beta_6 \cdot \text{Z\_Statistic\_Lag1}_t + \beta_7 \cdot \text{Interaction\_BW\_VIX}_t + \epsilon_t
-\]
+\end{dmath}
 
 ### 10-Day Return Model:
 
-\[
+\begin{dmath}
 \text{return\_10d}_t = \beta_0 + \beta_1 \cdot \text{Band\_Width}_t + \beta_2 \cdot \text{Proximity\_to\_Upper}_t + \beta_3 \cdot \text{Proximity\_to\_Lower}_t + \beta_4 \cdot \text{VIX}_t + \beta_5 \cdot \text{Band\_Width\_Lag1}_t + \beta_6 \cdot \text{Z\_Statistic\_Lag1}_t + \beta_7 \cdot \text{Interaction\_BW\_VIX}_t + \epsilon_t
-\]
+\end{dmath}
 
 These models aim to explain the returns over different time horizons (1-day, 5-day, 10-day) based on a combination of Bollinger Band metrics (width, proximity) and VIX.The lagged variables for Band Width and Z-Statistic allow the model to capture time-series dependencies. The interaction term between Band Width and VIX helps assess if the relationship between Bollinger Bands and returns is moderated by market volatility.
 
